@@ -32,7 +32,7 @@ export class SupabaseStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid Supabase token');
     }
 
-    console.log('[auth] token verified');
+    console.log('[AUTH] Supabase token verified, sub:', payload.sub);
 
     const extractedRoleRaw =
       (typeof payload.role === 'string' ? payload.role : undefined) ??
@@ -46,36 +46,57 @@ export class SupabaseStrategy extends PassportStrategy(Strategy) {
       ? (roleUpper as Role)
       : Role.CUSTOMER;
 
-    const userId = payload.sub;
-    const existing = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true },
-    });
+    const supabaseUserId = payload.sub;
+    const phone = payload.phone;
 
-    if (!existing) {
-      await this.prisma.user.create({
+    type UserInfo = { id: string; role: Role; phone: string | null };
+    let existingUser: UserInfo | null = null;
+    
+    // CRITICAL FIX: Find user by phone first (same user for web and mobile)
+    if (phone) {
+      existingUser = await this.prisma.user.findUnique({
+        where: { phone },
+        select: { id: true, role: true, phone: true },
+      });
+      
+      if (existingUser) {
+        console.log(`[AUTH] Found existing user by phone: ${phone}, userId: ${existingUser.id}`);
+      }
+    }
+
+    // If not found by phone, try by ID (for backward compatibility)
+    if (!existingUser) {
+      existingUser = await this.prisma.user.findUnique({
+        where: { id: supabaseUserId },
+        select: { id: true, role: true, phone: true },
+      });
+      
+      if (existingUser) {
+        console.log(`[AUTH] Found existing user by ID: ${supabaseUserId}`);
+      }
+    }
+
+    // If user still not found, create new user with Supabase ID
+    if (!existingUser) {
+      existingUser = await this.prisma.user.create({
         data: {
-          id: userId,
+          id: supabaseUserId,
           name: null,
-          phone: payload.phone ?? null,
+          phone: phone ?? null,
           email: payload.email,
           password: null,
           role: normalizedRole,
         },
-        select: { id: true },
+        select: { id: true, role: true, phone: true },
       });
-      console.log('[auth] user synced');
+      console.log(`[AUTH] Created new user: ${existingUser.id}, phone: ${existingUser.phone}, role: ${existingUser.role}`);
     }
 
-    if (existing) {
-      console.log('[auth] user exists');
-    }
-
-    const finalRole = existing?.role ?? normalizedRole;
+    console.log(`[AUTH] Final userId: ${existingUser.id}, role: ${existingUser.role}`);
 
     return {
-      userId,
-      role: finalRole,
+      userId: existingUser.id,
+      role: existingUser.role,
     };
   }
 }
