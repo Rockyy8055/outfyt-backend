@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Put, Req, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Put, Req, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { IsString, IsOptional, Length, IsNumber, IsNumberString } from 'class-validator';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,6 +44,28 @@ class UpdateStoreDto {
   @IsOptional()
   @IsNumber()
   longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}
+
+class CreateStoreDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  address!: string;
+
+  @IsNumber()
+  latitude!: number;
+
+  @IsNumber()
+  longitude!: number;
+
+  @IsOptional()
+  @IsString()
+  gstNumber?: string;
 
   @IsOptional()
   @IsString()
@@ -96,6 +118,8 @@ export class WebAuthController {
     const phone = dto.phone.trim();
     const otp = dto.otp.trim();
 
+    console.log(`[AUTH] Verify OTP attempt for phone: ${phone}`);
+
     // Check stored OTP
     const stored = otpStore.get(phone);
     
@@ -125,11 +149,19 @@ export class WebAuthController {
       return { success: false, error: 'Account not found' };
     }
 
-    // Get store info
+    console.log(`[AUTH] User found: ${user.id}, role: ${user.role}`);
+
+    // Get store info (DO NOT CREATE - only fetch)
     const store = await this.prisma.store.findUnique({
       where: { ownerId: user.id },
       select: { id: true, name: true, address: true },
     });
+
+    if (store) {
+      console.log(`[AUTH] Store found: ${store.id} for user: ${user.id}`);
+    } else {
+      console.log(`[AUTH] No store found for user: ${user.id}`);
+    }
 
     // Generate JWT
     const accessToken = await this.jwtService.signAsync({
@@ -156,6 +188,8 @@ export class WebAuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STORE')
   async getStoreProfile(@Req() req: AuthedRequest): Promise<any> {
+    console.log(`[STORE] Fetching store for userId: ${req.user.userId}`);
+    
     const store = await this.prisma.store.findUnique({
       where: { ownerId: req.user.userId },
       include: {
@@ -166,8 +200,11 @@ export class WebAuthController {
     });
 
     if (!store) {
+      console.log(`[STORE] No store found for userId: ${req.user.userId}`);
       throw new NotFoundException('Store not found');
     }
+
+    console.log(`[STORE] Store found: ${store.id}`);
 
     return {
       id: store.id,
@@ -213,6 +250,58 @@ export class WebAuthController {
         },
       },
     });
+
+    return {
+      id: store.id,
+      name: store.name,
+      address: store.address,
+      latitude: store.latitude,
+      longitude: store.longitude,
+      gstNumber: store.gstNumber,
+      phone: store.phone,
+      owner: store.owner,
+    };
+  }
+
+  // Create store (only if user doesn't have one)
+  @Post('store/create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STORE')
+  async createStore(
+    @Req() req: AuthedRequest,
+    @Body() dto: CreateStoreDto,
+  ): Promise<any> {
+    console.log(`[STORE] Create store request from userId: ${req.user.userId}`);
+    
+    // Check if user already has a store
+    const existingStore = await this.prisma.store.findUnique({
+      where: { ownerId: req.user.userId },
+    });
+
+    if (existingStore) {
+      console.log(`[STORE] User already has store: ${existingStore.id}`);
+      throw new ConflictException('User already has a store');
+    }
+
+    // Create new store
+    const store = await this.prisma.store.create({
+      data: {
+        name: dto.name,
+        address: dto.address,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        gstNumber: dto.gstNumber,
+        phone: dto.phone,
+        ownerId: req.user.userId,
+      },
+      include: {
+        owner: {
+          select: { id: true, name: true, phone: true, email: true },
+        },
+      },
+    });
+
+    console.log(`[STORE] Store created: ${store.id} for userId: ${req.user.userId}`);
 
     return {
       id: store.id,
