@@ -14,7 +14,7 @@
     "start:prod": "node --max-old-space-size=256 dist/main",
     "render:start": "node --max-old-space-size=256 dist/main",
     "render:build": "npm install && npx prisma generate && nest build",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && npm run build",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
