@@ -3,7 +3,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
+  
   app.enableCors();
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
@@ -14,6 +17,11 @@ async function bootstrap() {
     res.status(200).send('OK');
   });
   
-  await app.listen(process.env.PORT || 3000, '0.0.0.0');
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
+  
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Server running on port ${port}`);
 }
 bootstrap();
