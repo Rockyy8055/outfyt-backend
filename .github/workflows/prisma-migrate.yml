@@ -1,0 +1,48 @@
+name: Prisma Setup & Persist & Migrate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Create baseline migration if missing
+        run: |
+          if [ ! -d "prisma/migrations" ]; then
+            npx prisma migrate dev --name init --create-only
+          fi
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+
+      - name: Commit migration if created
+        run: |
+          if [ -d "prisma/migrations" ]; then
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add prisma/migrations
+            git commit -m "Add baseline migration" || echo "No changes to commit"
+            git push
+          fi
+
+      - name: Deploy migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}

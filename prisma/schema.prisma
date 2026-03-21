@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String?
+  phone      String?  @unique
+  email      String?  @unique
+  password   String?
+  role       Role
+  isBlocked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  store        Store?
+  orders       Order[]  @relation("CustomerOrders")
+  deliveries   Order[] @relation("RiderOrders")
+  deviceTokens DeviceToken[]
+  notifications Notification[]
+  tickets      Ticket[] @relation("UserTickets")
+  assignedTickets Ticket[] @relation("AssignedTickets")
+}
+
+model Store {
+  id         String   @id @default(uuid())
+  name       String
+  latitude   Float
+  longitude  Float
+  address    String
+  ownerId    String   @unique
+  owner      User     @relation(fields: [ownerId], references: [id])
+  products   Product[]
+  orders     Order[]
+  gstNumber  String?
+  phone      String?
+  isApproved Boolean  @default(true)
+  isDisabled Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  price     Float
+  images    String[]
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  inventory Inventory[]
+  category  String?
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Inventory {
+  id        String  @id @default(uuid())
+  productId String
+  size      String
+  stock     Int
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Order {
+  id               String        @id @default(uuid())
+  orderNumber      String        @unique
+  userId           String
+  storeId          String
+  riderId          String?
+  status           OrderStatus
+  paymentMethod    PaymentMethod
+  paymentStatus    PaymentStatus
+  totalAmount      Float
+  amountReceived    Float?
+  otpCode          String
+  deliveryLat      Float
+  deliveryLng      Float
+  deliveryAddress  String?
+  packingStartedAt DateTime?
+  rejectionReason  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user   User   @relation("CustomerOrders", fields: [userId], references: [id])
+  store  Store  @relation(fields: [storeId], references: [id])
+  rider  User?  @relation("RiderOrders", fields: [riderId], references: [id])
+  items  OrderItem[]
+}
+
+model OrderItem {
+  id             String @id @default(uuid())
+  orderId        String
+  productId      String
+  productName    String
+  size           String
+  quantity       Int
+  unitPrice      Float
+  offerPercentage Float?
+  order          Order  @relation(fields: [orderId], references: [id])
+}
+
+model RiderLocation {
+  id        String   @id @default(uuid())
+  riderId   String
+  orderId   String
+  latitude  Float
+  longitude Float
+  updatedAt DateTime @updatedAt
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String   // 'ios', 'android', 'web'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Ticket {
+  id           String      @id @default(uuid())
+  userId       String
+  orderId      String?
+  type         TicketType
+  subject      String
+  message      String
+  status       TicketStatus @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  assignedTo   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  resolvedAt   DateTime?
+
+  user         User        @relation("UserTickets", fields: [userId], references: [id])
+  assignee     User?       @relation("AssignedTickets", fields: [assignedTo], references: [id])
+  replies      TicketReply[]
+}
+
+model TicketReply {
+  id        String   @id @default(uuid())
+  ticketId  String
+  userId    String
+  message   String
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  orderId         String?
+  userId          String?
+  amount          Float
+  type            TransactionType
+  status          TransactionStatus @default(PENDING)
+  paymentGateway  String?
+  gatewayTxnId    String?
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+enum Role {
+  CUSTOMER
+  STORE
+  RIDER
+  ADMIN
+  SUPPORT
+  OPERATIONS
+}
+
+enum TicketType {
+  LATE_DELIVERY
+  WRONG_ITEM
+  DAMAGED_ITEM
+  MISSING_ITEM
+  PAYMENT_ISSUE
+  RIDER_BEHAVIOR
+  STORE_ISSUE
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TransactionType {
+  ORDER_PAYMENT
+  REFUND
+  RIDER_PAYOUT
+  STORE_PAYOUT
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PACKING
+  READY
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}

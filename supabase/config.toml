@@ -1,0 +1,20 @@
+[functions.create-order]
+verify_jwt = false
+
+[functions.store-accept-order]
+verify_jwt = false
+
+[functions.store-pack-order]
+verify_jwt = false
+
+[functions.store-extend-packing]
+verify_jwt = false
+
+[functions.handover-order]
+verify_jwt = false
+
+[functions.rider-update-order]
+verify_jwt = false
+
+[functions.get-order-details]
+verify_jwt = false

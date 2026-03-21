@@ -1,0 +1,25 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { SupabaseStrategy } from './supabase.strategy';
+import { MeController } from './me.controller';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { WebAuthController } from './web-auth.controller';
+import { PrismaModule } from '../prisma/prisma.module';
+
+@Module({
+  imports: [
+    ConfigModule,
+    PassportModule,
+    JwtModule.register({
+      secret: process.env.SUPABASE_JWT_SECRET || 'secret',
+      signOptions: { expiresIn: '7d' },
+    }),
+    PrismaModule,
+  ],
+  controllers: [MeController, AuthController, WebAuthController],
+  providers: [SupabaseStrategy, AuthService],
+})
+export class AuthModule {}
