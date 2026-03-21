@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     branch: main
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: node dist/main
     healthCheckPath: /health
     envVars:
