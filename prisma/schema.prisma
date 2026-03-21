@@ -19,13 +19,14 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  store        Store?
-  orders       Order[]  @relation("CustomerOrders")
-  deliveries   Order[] @relation("RiderOrders")
-  deviceTokens DeviceToken[]
-  notifications Notification[]
-  tickets      Ticket[] @relation("UserTickets")
+  store           Store?
+  orders          Order[]  @relation("CustomerOrders")
+  deliveries      Order[] @relation("RiderOrders")
+  deviceTokens    DeviceToken[]
+  notifications   Notification[]
+  tickets         Ticket[] @relation("UserTickets")
   assignedTickets Ticket[] @relation("AssignedTickets")
+  ticketReplies   TicketReply[]
 }
 
 model Store {
@@ -47,17 +48,18 @@ model Store {
 }
 
 model Product {
-  id        String   @id @default(uuid())
-  name      String
-  price     Float
-  images    String[]
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id])
-  inventory Inventory[]
-  category  String?
-  color     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  price      Float
+  images     String[]
+  storeId    String
+  store      Store    @relation(fields: [storeId], references: [id])
+  inventory  Inventory[]
+  orderItems OrderItem[]
+  category   String?
+  color      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Inventory {
@@ -88,10 +90,11 @@ model Order {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  user   User   @relation("CustomerOrders", fields: [userId], references: [id])
-  store  Store  @relation(fields: [storeId], references: [id])
-  rider  User?  @relation("RiderOrders", fields: [riderId], references: [id])
-  items  OrderItem[]
+  user         User           @relation("CustomerOrders", fields: [userId], references: [id])
+  store        Store          @relation(fields: [storeId], references: [id])
+  rider        User?          @relation("RiderOrders", fields: [riderId], references: [id])
+  items        OrderItem[]
+  transactions Transaction[]
 }
 
 model OrderItem {
@@ -104,6 +107,7 @@ model OrderItem {
   unitPrice      Float
   offerPercentage Float?
   order          Order  @relation(fields: [orderId], references: [id])
+  product        Product @relation(fields: [productId], references: [id])
 }
 
 model RiderLocation {
@@ -165,6 +169,7 @@ model TicketReply {
   createdAt DateTime @default(now())
 
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Transaction {
@@ -179,6 +184,8 @@ model Transaction {
   metadata        Json?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+
+  order           Order?          @relation(fields: [orderId], references: [id])
 }
 
 enum Role {

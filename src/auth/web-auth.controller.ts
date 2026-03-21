@@ -1,10 +1,10 @@
 import { Controller, Post, Body, UseGuards, Get, Put, Req, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { IsString, IsOptional, Length, IsNumber, IsNumberString } from 'class-validator';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../../prisma/prisma.service';
-import { JwtAuthGuard } from '../jwt-auth.guard';
-import { RolesGuard } from '../roles.guard';
-import { Roles } from '../roles.decorator';
+import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { RolesGuard } from './roles.guard';
+import { Roles } from './roles.decorator';
 
 type AuthedRequest = {
   user: { userId: string; role: string };

@@ -54,7 +54,7 @@ export class ProductsService {
       });
     }
 
-    return this.findById(product.id);
+    return this.findById(product.id) as Promise<ProductWithInventory>;
   }
 
   async findById(id: string): Promise<ProductWithInventory | null> {
