@@ -115,7 +115,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (!admin.isActive) {
+    if (admin.status !== 'active') {
       throw new UnauthorizedException('Account is deactivated');
     }
 
@@ -137,7 +137,7 @@ export class AuthService {
         email: admin.email,
         name: admin.name,
         role: admin.role,
-        avatarUrl: admin.avatarUrl,
+        avatar: admin.avatar,
       },
       accessToken: await this.signToken({ userId: admin.id, role: admin.role as Role }),
     };
@@ -219,8 +219,8 @@ export class AuthService {
         email: true,
         name: true,
         role: true,
-        avatarUrl: true,
-        isActive: true,
+        avatar: true,
+        status: true,
         lastLogin: true,
         createdAt: true,
       },
@@ -233,7 +233,7 @@ export class AuthService {
     return admin;
   }
 
-  async updateAdminProfile(adminId: string, data: { name?: string; avatarUrl?: string }) {
+  async updateAdminProfile(adminId: string, data: { name?: string; avatar?: string }) {
     const admin = await this.prisma.admin.update({
       where: { id: adminId },
       data: {
@@ -245,7 +245,7 @@ export class AuthService {
         email: true,
         name: true,
         role: true,
-        avatarUrl: true,
+        avatar: true,
       },
     });
 

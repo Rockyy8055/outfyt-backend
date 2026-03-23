@@ -81,7 +81,7 @@ class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  avatarUrl?: string;
+  avatar?: string;
 }
 
 type AuthedRequest = { user: { userId: string; role: string } };
