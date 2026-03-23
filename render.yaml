@@ -6,7 +6,7 @@ services:
     plan: free
     branch: main
     buildCommand: npm ci && npx prisma generate && npm run build
-    startCommand: node dist/src/main.js
+    startCommand: npm run start:prod
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
