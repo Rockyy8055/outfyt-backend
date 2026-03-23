@@ -267,6 +267,83 @@ export class AdminService {
     };
   }
 
+  // ==================== PRODUCT MANAGEMENT ====================
+
+  async getProducts(filters: {
+    storeId?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filters.storeId) {
+      where.storeId = filters.storeId;
+    }
+    if (filters.category) {
+      where.category = { contains: filters.category, mode: 'insensitive' };
+    }
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        include: {
+          store: { select: { id: true, name: true, address: true } },
+          _count: { select: { inventory: true } },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: products,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async getProductById(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        store: { select: { id: true, name: true, address: true, owner: { select: { name: true, phone: true } } } },
+        inventory: true,
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return { success: true, data: product };
+  }
+
+  async deleteProduct(id: string, adminId: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    await this.prisma.product.delete({ where: { id } });
+
+    await this.logAdminAction(adminId, 'DELETE_PRODUCT', 'Product', id, {});
+
+    return { success: true, message: 'Product deleted successfully' };
+  }
+
   async getStoreById(id: string) {
     const store = await this.prisma.store.findUnique({
       where: { id },
@@ -519,6 +596,191 @@ export class AdminService {
   }
 
   // ==================== ANALYTICS ====================
+
+  async getDashboardStats() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const last7Days = new Date();
+    last7Days.setDate(last7Days.getDate() - 7);
+    
+    const last30Days = new Date();
+    last30Days.setDate(last30Days.getDate() - 30);
+
+    const [
+      totalOrders,
+      totalRevenue,
+      todayOrders,
+      todayRevenue,
+      activeStores,
+      totalStores,
+      activeRiders,
+      totalRiders,
+      totalCustomers,
+      pendingOrders,
+      deliveredOrders,
+      cancelledOrders,
+      openTickets,
+      recentOrders,
+      topStores,
+      ordersByStatus,
+      revenueLast7Days,
+      ordersLast7Days,
+    ] = await Promise.all([
+      // Total orders
+      this.prisma.order.count(),
+      
+      // Total revenue
+      this.prisma.order.aggregate({
+        where: { paymentStatus: 'SUCCESS' },
+        _sum: { totalAmount: true },
+      }),
+      
+      // Today's orders
+      this.prisma.order.count({
+        where: { createdAt: { gte: today } },
+      }),
+      
+      // Today's revenue
+      this.prisma.order.aggregate({
+        where: { paymentStatus: 'SUCCESS', createdAt: { gte: today } },
+        _sum: { totalAmount: true },
+      }),
+      
+      // Active stores
+      this.prisma.store.count({ where: { isDisabled: false, isApproved: true } }),
+      
+      // Total stores
+      this.prisma.store.count(),
+      
+      // Active riders
+      this.prisma.user.count({ where: { role: 'RIDER', isBlocked: false } }),
+      
+      // Total riders
+      this.prisma.user.count({ where: { role: 'RIDER' } }),
+      
+      // Total customers
+      this.prisma.user.count({ where: { role: 'CUSTOMER' } }),
+      
+      // Pending orders
+      this.prisma.order.count({ where: { status: { in: ['PENDING', 'ACCEPTED', 'PACKING', 'READY'] } } }),
+      
+      // Delivered orders
+      this.prisma.order.count({ where: { status: 'DELIVERED' } }),
+      
+      // Cancelled orders
+      this.prisma.order.count({ where: { status: 'CANCELLED' } }),
+      
+      // Open tickets
+      this.prisma.ticket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      
+      // Recent orders (last 10)
+      this.prisma.order.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          store: { select: { id: true, name: true } },
+          items: { select: { id: true, productName: true, quantity: true, unitPrice: true } },
+        },
+      }),
+      
+      // Top stores by orders
+      this.prisma.store.findMany({
+        take: 5,
+        include: {
+          owner: { select: { name: true, phone: true } },
+          _count: { select: { orders: true, products: true } },
+        },
+        orderBy: { orders: { _count: 'desc' } },
+      }),
+      
+      // Orders by status
+      this.prisma.order.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      }),
+      
+      // Revenue last 7 days
+      this.prisma.order.groupBy({
+        by: ['createdAt'],
+        where: {
+          paymentStatus: 'SUCCESS',
+          createdAt: { gte: last7Days },
+        },
+        _sum: { totalAmount: true },
+      }),
+      
+      // Orders last 7 days
+      this.prisma.order.groupBy({
+        by: ['createdAt'],
+        where: { createdAt: { gte: last7Days } },
+        _count: { id: true },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        overview: {
+          totalOrders,
+          totalRevenue: totalRevenue._sum.totalAmount || 0,
+          todayOrders,
+          todayRevenue: todayRevenue._sum.totalAmount || 0,
+          activeStores,
+          totalStores,
+          activeRiders,
+          totalRiders,
+          totalCustomers,
+          pendingOrders,
+          deliveredOrders,
+          cancelledOrders,
+          openTickets,
+        },
+        recentOrders: recentOrders.map(order => ({
+          id: order.id,
+          orderNumber: order.id.slice(0, 8).toUpperCase(),
+          status: order.status,
+          totalAmount: order.totalAmount,
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          createdAt: order.createdAt,
+          customer: order.user ? {
+            id: order.user.id,
+            name: order.user.name,
+            phone: order.user.phone,
+          } : null,
+          store: order.store ? {
+            id: order.store.id,
+            name: order.store.name,
+          } : null,
+          items: order.items,
+        })),
+        topStores: topStores.map(store => ({
+          id: store.id,
+          name: store.name,
+          address: store.address,
+          owner: store.owner,
+          totalOrders: store._count.orders,
+          totalProducts: store._count.products,
+        })),
+        ordersByStatus: ordersByStatus.reduce((acc, item) => {
+          acc[item.status] = item._count.id;
+          return acc;
+        }, {} as Record<string, number>),
+        charts: {
+          revenueLast7Days: revenueLast7Days.map(item => ({
+            date: item.createdAt,
+            revenue: item._sum.totalAmount || 0,
+          })),
+          ordersLast7Days: ordersLast7Days.map(item => ({
+            date: item.createdAt,
+            count: item._count.id,
+          })),
+        },
+      },
+    };
+  }
 
   async getAnalytics() {
     const [

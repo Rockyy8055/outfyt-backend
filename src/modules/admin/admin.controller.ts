@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -105,6 +106,28 @@ class StoreFilterDto {
   @IsOptional()
   @IsNumberString()
   limit?: string;
+}
+
+class ProductFilterDto {
+  @IsOptional()
+  @IsString()
+  storeId?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  page?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  limit?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 
 class RejectStoreDto {
@@ -308,6 +331,27 @@ export class AdminController {
     return this.adminService.disableStore(id, dto.reason, req.user.userId);
   }
 
+  // ==================== PRODUCT MANAGEMENT ====================
+
+  @Get('products')
+  async getProducts(@Query() filters: ProductFilterDto) {
+    return this.adminService.getProducts({
+      ...filters,
+      page: filters.page ? parseInt(filters.page, 10) : undefined,
+      limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
+    });
+  }
+
+  @Get('products/:id')
+  async getProductById(@Param('id') id: string) {
+    return this.adminService.getProductById(id);
+  }
+
+  @Delete('products/:id')
+  async deleteProduct(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.adminService.deleteProduct(id, req.user.userId);
+  }
+
   // ==================== RIDER MANAGEMENT ====================
 
   @Get('riders')
@@ -378,6 +422,11 @@ export class AdminController {
   }
 
   // ==================== ANALYTICS ====================
+
+  @Get('dashboard')
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
 
   @Get('analytics')
   async getAnalytics() {
