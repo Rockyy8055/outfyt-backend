@@ -12,6 +12,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ProductsModule } from './modules/products/products.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { ProfileModule } from './modules/profile/profile.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { AdminModule } from './modules/admin/admin.module';
     ProductsModule,
     UploadModule,
     AdminModule,
+    DiscoveryModule,
+    WishlistModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
