@@ -116,17 +116,18 @@ export class AuthController {
 
   @Get('admin/check')
   async checkAdmin() {
-    try {
-      const admin = await this.prisma.admin.findUnique({
-        where: { email: 'shreysm8055@gmail.com' },
-      });
-      if (admin) {
-        return { exists: true, email: admin.email, hasPassword: !!admin.password, status: admin.status };
-      }
-      return { exists: false };
-    } catch (error) {
-      return { error: String(error) };
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    });
+    
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
+    const admin = result.rows[0];
+    
+    if (admin) {
+      return { exists: true, email: admin.email, hasPassword: !!admin.password, status: admin.status };
     }
+    return { exists: false };
   }
 
   @Get('admin/debug')
@@ -136,7 +137,7 @@ export class AuthController {
       connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
     });
     
-    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreysm8055@gmail.com']);
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
     const row = result.rows[0];
     
     if (!row) {
@@ -144,7 +145,7 @@ export class AuthController {
     }
     
     // Test password comparison
-    const testResult = await bcrypt.compare('outfytlogin@01', row.password);
+    const testResult = await bcrypt.compare('Outfytlogin@01', row.password);
     
     return {
       exists: true,
