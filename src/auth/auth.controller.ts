@@ -3,6 +3,8 @@ import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validato
 import { AuthService } from './auth.service';
 import { Role } from './roles.enum';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 class RegisterDto {
   @IsString()
@@ -88,7 +90,10 @@ type AuthedRequest = { user: { userId: string; role: string } };
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   // ==================== MOBILE APP AUTH ====================
   @Post('register')
@@ -109,9 +114,8 @@ export class AuthController {
 
   @Post('admin/fix')
   async fixAdmin() {
-    const bcrypt = require('bcrypt');
     const password = await bcrypt.hash('outfytlogin@01', 12);
-    const admin = await this.authService['prisma'].admin.upsert({
+    const admin = await this.prisma.admin.upsert({
       where: { email: 'shreysm8055@gmail.com' },
       create: {
         email: 'shreysm8055@gmail.com',
