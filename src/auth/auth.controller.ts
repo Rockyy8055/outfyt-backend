@@ -171,34 +171,39 @@ export class AuthController {
       });
       
       const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
-      const admin = result.rows[0];
+      const row = result.rows[0];
       
-      if (!admin || !admin.password) {
-        return { error: 'Invalid credentials' };
+      if (!row || !row.password) {
+        throw new Error('Invalid credentials');
       }
 
-      const isValid = await bcrypt.compare(body.password, admin.password);
+      const isValid = await bcrypt.compare(body.password, row.password);
       if (!isValid) {
-        return { error: 'Invalid credentials' };
+        throw new Error('Invalid credentials');
       }
+
+      // Map snake_case to camelCase (id is mapped to user_id in schema)
+      const admin = {
+        id: row.user_id || row.id,
+        email: row.email,
+        name: row.name || 'Admin',
+        role: row.role || 'admin',
+        avatar: row.avatar,
+      };
 
       // Generate JWT token
       const token = await this.jwtService.signAsync({ 
         userId: admin.id, 
-        role: admin.role || 'admin' 
+        role: admin.role 
       });
 
       return {
-        admin: {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name || 'Admin',
-          role: admin.role || 'admin',
-        },
+        admin,
         accessToken: token,
       };
     } catch (error) {
-      return { error: 'Login failed', details: String(error) };
+      console.error('Login error:', error);
+      throw error;
     }
   }
 
