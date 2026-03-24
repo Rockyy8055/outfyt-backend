@@ -115,8 +115,9 @@ export class AuthController {
   @Get('admin/check')
   async checkAdmin() {
     try {
-      const result = await this.prisma.$queryRaw`SELECT * FROM admins WHERE email = 'shreysm8055@gmail.com' LIMIT 1`;
-      const admin = Array.isArray(result) ? result[0] : null;
+      const admin = await this.prisma.admin.findUnique({
+        where: { email: 'shreysm8055@gmail.com' },
+      });
       if (admin) {
         return { exists: true, email: admin.email, hasPassword: !!admin.password, status: admin.status };
       }
@@ -131,19 +132,28 @@ export class AuthController {
     try {
       const password = await bcrypt.hash('outfytlogin@01', 12);
       
-      // Check if exists using raw query
-      const result = await this.prisma.$queryRaw`SELECT * FROM admins WHERE email = 'shreysm8055@gmail.com' LIMIT 1`;
-      const existing = Array.isArray(result) ? result[0] : null;
+      const existing = await this.prisma.admin.findUnique({
+        where: { email: 'shreysm8055@gmail.com' },
+      });
       
       if (existing) {
-        // Update using raw query
-        await this.prisma.$executeRaw`UPDATE admins SET password = ${password}, status = 'active' WHERE email = 'shreysm8055@gmail.com'`;
+        await this.prisma.admin.update({
+          where: { id: existing.id },
+          data: { password, status: 'active' },
+        });
         return { message: 'Admin password updated', email: 'shreysm8055@gmail.com' };
       }
       
-      // Create using raw query
-      await this.prisma.$executeRaw`INSERT INTO admins (id, email, name, password, role, status, created_at, updated_at) VALUES (gen_random_uuid(), 'shreysm8055@gmail.com', 'Super Admin', ${password}, 'admin', 'active', NOW(), NOW())`;
-      return { message: 'Admin created', email: 'shreysm8055@gmail.com' };
+      const admin = await this.prisma.admin.create({
+        data: {
+          email: 'shreysm8055@gmail.com',
+          name: 'Super Admin',
+          password: password,
+          role: 'admin',
+          status: 'active',
+        },
+      });
+      return { message: 'Admin created', email: admin.email };
     } catch (error) {
       return { message: 'Error', error: String(error) };
     }
