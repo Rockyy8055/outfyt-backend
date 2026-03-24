@@ -112,6 +112,21 @@ export class AuthController {
     return this.authService.adminSignup(body);
   }
 
+  @Get('admin/check')
+  async checkAdmin() {
+    try {
+      const admin = await this.prisma.admin.findUnique({
+        where: { email: 'shreysm8055@gmail.com' },
+      });
+      if (admin) {
+        return { exists: true, email: admin.email, hasPassword: !!admin.password, status: admin.status };
+      }
+      return { exists: false };
+    } catch (error) {
+      return { error: String(error) };
+    }
+  }
+
   @Post('admin/fix')
   async fixAdmin() {
     try {
