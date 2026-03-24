@@ -166,7 +166,7 @@ export class AuthController {
     
     const password = await bcrypt.hash('Outfytlogin@01', 12);
     
-    // Check if exists
+    // Check if exists - use user_id column (mapped from id in Prisma)
     const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
     const existing = result.rows[0];
     
@@ -176,9 +176,9 @@ export class AuthController {
       return { message: 'Admin password updated', email: 'shreyasm8055@gmail.com' };
     }
     
-    // Create new admin
+    // Create new admin with user_id column (Prisma maps id to user_id)
     await pool.query(
-      'INSERT INTO admins (id, email, name, password, role, status, created_at, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())',
+      'INSERT INTO admins (user_id, email, name, password, role, status, created_at, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())',
       ['shreyasm8055@gmail.com', 'Super Admin', password, 'admin', 'active']
     );
     return { message: 'Admin created', email: 'shreyasm8055@gmail.com' };
@@ -195,7 +195,7 @@ export class AuthController {
     
     const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
     const row = result.rows[0];
-    console.log('[LOGIN] Found user:', row ? { email: row.email, id: row.id, user_id: row.user_id } : 'not found');
+    console.log('[LOGIN] Found user:', row ? { email: row.email, user_id: row.user_id } : 'not found');
     
     if (!row || !row.password) {
       console.log('[LOGIN] No user or password');
@@ -209,8 +209,8 @@ export class AuthController {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // The id column is mapped to user_id in Prisma schema, but in raw SQL it's 'id'
-    const adminId = row.id || row.user_id;
+    // The id column is mapped to user_id in Prisma schema
+    const adminId = row.user_id;
     console.log('[LOGIN] Admin ID:', adminId);
     
     if (!adminId) {
