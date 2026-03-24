@@ -190,7 +190,8 @@ export class AuthController {
 
   @Post('admin/login')
   async adminLoginDirect(@Body() body: AdminLoginDto) {
-    // Import pg directly to use direct connection
+    console.log('[LOGIN] Attempt for:', body.email);
+    
     const { Pool } = require('pg');
     const pool = new Pool({
       connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
@@ -198,12 +199,16 @@ export class AuthController {
     
     const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
     const row = result.rows[0];
+    console.log('[LOGIN] Found user:', row ? row.email : 'not found');
     
     if (!row || !row.password) {
+      console.log('[LOGIN] No user or password');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isValid = await bcrypt.compare(body.password, row.password);
+    console.log('[LOGIN] Password valid:', isValid);
+    
     if (!isValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -216,12 +221,15 @@ export class AuthController {
       role: row.role || 'admin',
       avatar: row.avatar,
     };
+    
+    console.log('[LOGIN] Admin object:', admin);
 
     // Generate JWT token
     const token = await this.jwtService.signAsync({ 
       userId: admin.id, 
       role: admin.role 
     });
+    console.log('[LOGIN] Token generated');
 
     return {
       admin,
