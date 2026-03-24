@@ -15,6 +15,7 @@ import { Transform } from 'class-transformer';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
+import { DirectDbService } from './direct-db.service';
 
 type AuthedRequest = {
   user: { userId: string; role: string };
@@ -223,7 +224,10 @@ class TransactionFilterDto {
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly directDbService: DirectDbService,
+  ) {}
 
   // ==================== ORDER MANAGEMENT ====================
 
@@ -425,7 +429,7 @@ export class AdminController {
 
   @Get('dashboard')
   async getDashboardStats() {
-    return this.adminService.getDashboardStats();
+    return this.directDbService.getDashboardStats();
   }
 
   @Get('analytics')
