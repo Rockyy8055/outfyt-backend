@@ -1,8 +1,24 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // Seed Admin User
+  const adminPassword = await bcrypt.hash('admin123', 12);
+  const admin = await prisma.admin.upsert({
+    where: { email: 'admin@outfyt.com' },
+    create: {
+      email: 'admin@outfyt.com',
+      name: 'Admin User',
+      password: adminPassword,
+      role: 'admin',
+      status: 'active',
+    },
+    update: {},
+  });
+  console.log('✅ Admin user seeded:', admin.email);
+
   // Seed Categories
   const categories = await Promise.all([
     prisma.category.upsert({
