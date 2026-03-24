@@ -142,6 +142,37 @@ export class AuthController {
     };
   }
 
+  @Get('admin/debug-token')
+  async debugToken(@Req() req: any) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return { error: 'No authorization header' };
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const parts = token.split('.');
+    
+    if (parts.length !== 3) {
+      return { error: 'Invalid JWT format', parts: parts.length };
+    }
+    
+    try {
+      // Decode without verifying
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      const header = JSON.parse(Buffer.from(parts[0], 'base64').toString());
+      
+      return {
+        header,
+        payload,
+        now: new Date().toISOString(),
+        expDate: new Date(payload.exp * 1000).toISOString(),
+        isExpired: Date.now() > payload.exp * 1000,
+      };
+    } catch (e: any) {
+      return { error: e.message };
+    }
+  }
+
   @Get('admin/debug')
   async debugAdmin() {
     const { Pool } = require('pg');
