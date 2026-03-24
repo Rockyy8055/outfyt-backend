@@ -164,11 +164,14 @@ export class AuthController {
   @Post('admin/login')
   async adminLoginDirect(@Body() body: AdminLoginDto) {
     try {
-      // Direct SQL query to bypass Prisma prepared statement issues
-      const result = await this.prisma.$queryRaw`
-        SELECT * FROM admins WHERE email = ${body.email} LIMIT 1
-      `;
-      const admin = Array.isArray(result) ? result[0] : null;
+      // Import pg directly to use direct connection
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+      });
+      
+      const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
+      const admin = result.rows[0];
       
       if (!admin || !admin.password) {
         return { error: 'Invalid credentials' };
