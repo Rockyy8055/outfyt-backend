@@ -158,34 +158,29 @@ export class AuthController {
 
   @Post('admin/fix')
   async fixAdmin() {
-    try {
-      const password = await bcrypt.hash('outfytlogin@01', 12);
-      
-      const existing = await this.prisma.admin.findUnique({
-        where: { email: 'shreysm8055@gmail.com' },
-      });
-      
-      if (existing) {
-        await this.prisma.admin.update({
-          where: { id: existing.id },
-          data: { password, status: 'active' },
-        });
-        return { message: 'Admin password updated', email: 'shreysm8055@gmail.com' };
-      }
-      
-      const admin = await this.prisma.admin.create({
-        data: {
-          email: 'shreysm8055@gmail.com',
-          name: 'Super Admin',
-          password: password,
-          role: 'admin',
-          status: 'active',
-        },
-      });
-      return { message: 'Admin created', email: admin.email };
-    } catch (error) {
-      return { message: 'Error', error: String(error) };
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    });
+    
+    const password = await bcrypt.hash('Outfytlogin@01', 12);
+    
+    // Check if exists
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
+    const existing = result.rows[0];
+    
+    if (existing) {
+      // Update password
+      await pool.query('UPDATE admins SET password = $1, status = $2 WHERE email = $3', [password, 'active', 'shreyasm8055@gmail.com']);
+      return { message: 'Admin password updated', email: 'shreyasm8055@gmail.com' };
     }
+    
+    // Create new admin
+    await pool.query(
+      'INSERT INTO admins (id, email, name, password, role, status, created_at, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())',
+      ['shreyasm8055@gmail.com', 'Super Admin', password, 'admin', 'active']
+    );
+    return { message: 'Admin created', email: 'shreyasm8055@gmail.com' };
   }
 
   @Post('admin/login')
