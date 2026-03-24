@@ -16,7 +16,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node --max-old-space-size=256 dist/src/main.js",
     "render:start": "node --max-old-space-size=256 dist/src/main.js",
-    "render:build": "npm install && npx prisma generate && nest build",
+    "render:build": "npm install && npx prisma generate && npx prisma db seed && nest build",
     "postinstall": "prisma generate && npm run build",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
