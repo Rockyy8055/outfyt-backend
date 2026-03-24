@@ -15,7 +15,10 @@ async function main() {
       role: 'admin',
       status: 'active',
     },
-    update: {},
+    update: {
+      password: adminPassword,
+      status: 'active',
+    },
   });
   console.log('✅ Admin user seeded:', admin.email);
 
