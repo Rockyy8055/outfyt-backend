@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { SupabaseStrategy } from './supabase.strategy';
@@ -14,9 +14,15 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [
     ConfigModule,
     PassportModule,
-    JwtModule.register({
-      secret: process.env.SUPABASE_JWT_SECRET || 'secret',
-      signOptions: { expiresIn: '7d' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('SUPABASE_JWT_SECRET') || 
+                configService.get<string>('JWT_SECRET') || 
+                'outfyt-jwt-secret-key-change-in-production',
+        signOptions: { expiresIn: '7d' },
+      }),
+      inject: [ConfigService],
     }),
     PrismaModule,
   ],
