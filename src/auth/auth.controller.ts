@@ -114,22 +114,37 @@ export class AuthController {
 
   @Post('admin/fix')
   async fixAdmin() {
-    const password = await bcrypt.hash('outfytlogin@01', 12);
-    const admin = await this.prisma.admin.upsert({
-      where: { email: 'shreysm8055@gmail.com' },
-      create: {
-        email: 'shreysm8055@gmail.com',
-        name: 'Super Admin',
-        password: password,
-        role: 'admin',
-        status: 'active',
-      },
-      update: {
-        password: password,
-        status: 'active',
-      },
-    });
-    return { message: 'Admin fixed', email: admin.email };
+    try {
+      const password = await bcrypt.hash('outfytlogin@01', 12);
+      
+      // Try to find existing admin first
+      const existing = await this.prisma.admin.findUnique({
+        where: { email: 'shreysm8055@gmail.com' },
+      });
+      
+      if (existing) {
+        // Update password
+        await this.prisma.admin.update({
+          where: { id: existing.id },
+          data: { password, status: 'active' },
+        });
+        return { message: 'Admin password updated', email: existing.email };
+      }
+      
+      // Create new admin
+      const admin = await this.prisma.admin.create({
+        data: {
+          email: 'shreysm8055@gmail.com',
+          name: 'Super Admin',
+          password: password,
+          role: 'admin',
+          status: 'active',
+        },
+      });
+      return { message: 'Admin created', email: admin.email };
+    } catch (error) {
+      return { message: 'Error', error: String(error) };
+    }
   }
 
   @Post('admin/login')
