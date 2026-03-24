@@ -12,16 +12,20 @@ export type JwtPayload = {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
+    const secret = configService.get<string>('SUPABASE_JWT_SECRET') || 
+                   configService.get<string>('JWT_SECRET') || 
+                   'outfyt-jwt-secret-key-change-in-production';
+    console.log('[JwtStrategy] Using secret:', secret ? secret.substring(0, 10) + '...' : 'none');
+    
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('SUPABASE_JWT_SECRET') || 
-                   configService.get<string>('JWT_SECRET') || 
-                   'outfyt-jwt-secret-key-change-in-production',
+      secretOrKey: secret,
     });
   }
 
   async validate(payload: JwtPayload) {
+    console.log('[JwtStrategy] Validating payload:', payload);
     return { userId: payload.userId, role: payload.role };
   }
 }
