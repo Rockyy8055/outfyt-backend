@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-export const ADMIN_ROLES = ['ADMIN', 'SUPPORT', 'OPERATIONS', 'admin', 'support', 'operations'] as const;
+export const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'SUPPORT', 'OPERATIONS', 'admin', 'super_admin', 'support', 'operations'] as const;
 
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -17,12 +17,12 @@ export class AdminGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    const userRole = user.role;
+    const userRole = user.role?.toUpperCase() || '';
     console.log('[AdminGuard] User role:', userRole);
     
     // Check if role is in allowed list (case-insensitive)
-    const allowedRoles = ['ADMIN', 'SUPPORT', 'OPERATIONS'];
-    if (!allowedRoles.includes(userRole.toUpperCase())) {
+    const allowedRoles = ['ADMIN', 'SUPER_ADMIN', 'SUPPORT', 'OPERATIONS'];
+    if (!allowedRoles.includes(userRole)) {
       throw new ForbiddenException('Admin access required');
     }
 
@@ -34,7 +34,7 @@ export class AdminGuard implements CanActivate {
 
     if (requiredRoles && requiredRoles.length > 0) {
       const normalizedRequired = requiredRoles.map(r => r.toUpperCase());
-      if (!normalizedRequired.includes(userRole.toUpperCase())) {
+      if (!normalizedRequired.includes(userRole)) {
         throw new ForbiddenException(`Required roles: ${requiredRoles.join(', ')}`);
       }
     }
