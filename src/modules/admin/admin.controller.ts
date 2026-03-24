@@ -229,6 +229,14 @@ export class AdminController {
     private readonly directDbService: DirectDbService,
   ) {}
 
+  // ==================== PUBLIC TEST ENDPOINT ====================
+  
+  @Get('test/data')
+  async getTestData() {
+    // This endpoint bypasses guards for testing
+    return this.directDbService.getDashboardStats();
+  }
+
   // ==================== ORDER MANAGEMENT ====================
 
   @Get('orders')
