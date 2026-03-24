@@ -129,6 +129,33 @@ export class AuthController {
     }
   }
 
+  @Get('admin/debug')
+  async debugAdmin() {
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    });
+    
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreysm8055@gmail.com']);
+    const row = result.rows[0];
+    
+    if (!row) {
+      return { exists: false };
+    }
+    
+    // Test password comparison
+    const testResult = await bcrypt.compare('outfytlogin@01', row.password);
+    
+    return {
+      exists: true,
+      email: row.email,
+      passwordLength: row.password?.length,
+      passwordStart: row.password?.substring(0, 10),
+      testPasswordMatch: testResult,
+      status: row.status,
+    };
+  }
+
   @Post('admin/fix')
   async fixAdmin() {
     try {
