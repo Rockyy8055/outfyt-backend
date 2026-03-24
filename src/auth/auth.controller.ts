@@ -107,6 +107,27 @@ export class AuthController {
     return this.authService.adminSignup(body);
   }
 
+  @Post('admin/fix')
+  async fixAdmin() {
+    const bcrypt = require('bcrypt');
+    const password = await bcrypt.hash('outfytlogin@01', 12);
+    const admin = await this.authService['prisma'].admin.upsert({
+      where: { email: 'shreysm8055@gmail.com' },
+      create: {
+        email: 'shreysm8055@gmail.com',
+        name: 'Super Admin',
+        password: password,
+        role: 'admin',
+        status: 'active',
+      },
+      update: {
+        password: password,
+        status: 'active',
+      },
+    });
+    return { message: 'Admin fixed', email: admin.email };
+  }
+
   @Post('admin/login')
   adminLogin(@Body() body: AdminLoginDto) {
     return this.authService.adminLogin(body);
