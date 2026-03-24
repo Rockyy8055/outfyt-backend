@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Req, Get, Put } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Req, Get, Put, UnauthorizedException } from '@nestjs/common';
 import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import { AuthService } from './auth.service';
 import { Role } from './roles.enum';
@@ -163,48 +163,43 @@ export class AuthController {
 
   @Post('admin/login')
   async adminLoginDirect(@Body() body: AdminLoginDto) {
-    try {
-      // Import pg directly to use direct connection
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
-      });
-      
-      const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
-      const row = result.rows[0];
-      
-      if (!row || !row.password) {
-        throw new Error('Invalid credentials');
-      }
-
-      const isValid = await bcrypt.compare(body.password, row.password);
-      if (!isValid) {
-        throw new Error('Invalid credentials');
-      }
-
-      // Map snake_case to camelCase (id is mapped to user_id in schema)
-      const admin = {
-        id: row.user_id || row.id,
-        email: row.email,
-        name: row.name || 'Admin',
-        role: row.role || 'admin',
-        avatar: row.avatar,
-      };
-
-      // Generate JWT token
-      const token = await this.jwtService.signAsync({ 
-        userId: admin.id, 
-        role: admin.role 
-      });
-
-      return {
-        admin,
-        accessToken: token,
-      };
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+    // Import pg directly to use direct connection
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    });
+    
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', [body.email]);
+    const row = result.rows[0];
+    
+    if (!row || !row.password) {
+      throw new UnauthorizedException('Invalid credentials');
     }
+
+    const isValid = await bcrypt.compare(body.password, row.password);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Map snake_case to camelCase (id is mapped to user_id in schema)
+    const admin = {
+      id: row.user_id || row.id,
+      email: row.email,
+      name: row.name || 'Admin',
+      role: row.role || 'admin',
+      avatar: row.avatar,
+    };
+
+    // Generate JWT token
+    const token = await this.jwtService.signAsync({ 
+      userId: admin.id, 
+      role: admin.role 
+    });
+
+    return {
+      admin,
+      accessToken: token,
+    };
   }
 
   @Post('admin/forgot-password')
