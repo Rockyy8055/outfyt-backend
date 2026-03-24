@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { Role } from './roles.enum';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 class RegisterDto {
@@ -93,6 +94,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
   // ==================== MOBILE APP AUTH ====================
@@ -160,8 +162,41 @@ export class AuthController {
   }
 
   @Post('admin/login')
-  adminLogin(@Body() body: AdminLoginDto) {
-    return this.authService.adminLogin(body);
+  async adminLoginDirect(@Body() body: AdminLoginDto) {
+    try {
+      // Direct SQL query to bypass Prisma prepared statement issues
+      const result = await this.prisma.$queryRaw`
+        SELECT * FROM admins WHERE email = ${body.email} LIMIT 1
+      `;
+      const admin = Array.isArray(result) ? result[0] : null;
+      
+      if (!admin || !admin.password) {
+        return { error: 'Invalid credentials' };
+      }
+
+      const isValid = await bcrypt.compare(body.password, admin.password);
+      if (!isValid) {
+        return { error: 'Invalid credentials' };
+      }
+
+      // Generate JWT token
+      const token = await this.jwtService.signAsync({ 
+        userId: admin.id, 
+        role: admin.role || 'admin' 
+      });
+
+      return {
+        admin: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name || 'Admin',
+          role: admin.role || 'admin',
+        },
+        accessToken: token,
+      };
+    } catch (error) {
+      return { error: 'Login failed', details: String(error) };
+    }
   }
 
   @Post('admin/forgot-password')
