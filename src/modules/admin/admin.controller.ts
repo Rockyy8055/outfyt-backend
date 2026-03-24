@@ -233,7 +233,7 @@ export class AdminController {
 
   @Get('orders')
   async getOrders(@Query() filters: OrderFilterDto) {
-    return this.adminService.getOrders({
+    return this.directDbService.getOrders({
       ...filters,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
@@ -276,9 +276,8 @@ export class AdminController {
 
   @Get('users')
   async getUsers(@Query() filters: UserFilterDto) {
-    return this.adminService.getUsers({
+    return this.directDbService.getUsers({
       ...filters,
-      isBlocked: filters.isBlocked ? filters.isBlocked === 'true' : undefined,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
     });
@@ -298,10 +297,8 @@ export class AdminController {
 
   @Get('stores')
   async getStores(@Query() filters: StoreFilterDto) {
-    return this.adminService.getStores({
+    return this.directDbService.getStores({
       ...filters,
-      isApproved: filters.isApproved ? filters.isApproved === 'true' : undefined,
-      isDisabled: filters.isDisabled ? filters.isDisabled === 'true' : undefined,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
     });
@@ -360,9 +357,8 @@ export class AdminController {
 
   @Get('riders')
   async getRiders(@Query() filters: RiderFilterDto) {
-    return this.adminService.getRiders({
+    return this.directDbService.getRiders({
       ...filters,
-      isBlocked: filters.isBlocked ? filters.isBlocked === 'true' : undefined,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
     });
@@ -386,7 +382,7 @@ export class AdminController {
 
   @Get('tickets')
   async getTickets(@Query() filters: TicketFilterDto) {
-    return this.adminService.getTickets({
+    return this.directDbService.getTickets({
       ...filters,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
@@ -434,7 +430,7 @@ export class AdminController {
 
   @Get('analytics')
   async getAnalytics() {
-    return this.adminService.getAnalytics();
+    return this.directDbService.getAnalytics();
   }
 
   // ==================== GLOBAL SEARCH ====================
@@ -448,7 +444,7 @@ export class AdminController {
 
   @Get('transactions')
   async getTransactions(@Query() filters: TransactionFilterDto) {
-    return this.adminService.getTransactions({
+    return this.directDbService.getTransactions({
       ...filters,
       page: filters.page ? parseInt(filters.page, 10) : undefined,
       limit: filters.limit ? parseInt(filters.limit, 10) : undefined,
