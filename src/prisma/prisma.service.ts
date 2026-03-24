@@ -3,22 +3,6 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
-    super({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
-      // Disable prepared statements for Supabase/Render compatibility
-      __internal: {
-        engine: {
-          preparedStatements: false,
-        },
-      },
-    });
-  }
-
   async onModuleInit() {
     try {
       await this.$connect();
