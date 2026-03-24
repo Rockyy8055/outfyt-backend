@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     branch: main
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm ci && npx prisma generate && npx prisma db push --accept-empty && npx prisma db seed && npm run build
     startCommand: npm run start:prod
     healthCheckPath: /
     envVars:
