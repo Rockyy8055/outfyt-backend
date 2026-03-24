@@ -157,7 +157,7 @@ export class AuthController {
     };
   }
 
-  @Post('admin/fix')
+  @Get('admin/fix')
   async fixAdmin() {
     const { Pool } = require('pg');
     const pool = new Pool({
