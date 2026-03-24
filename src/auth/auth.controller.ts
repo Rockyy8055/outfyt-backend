@@ -121,13 +121,25 @@ export class AuthController {
       connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
     });
     
-    const result = await pool.query('SELECT * FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
-    const admin = result.rows[0];
+    const result = await pool.query('SELECT email, password IS NOT NULL as "hasPassword", role FROM admins WHERE email = $1 LIMIT 1', ['shreyasm8055@gmail.com']);
+    const row = result.rows[0];
     
-    if (admin) {
-      return { exists: true, email: admin.email, hasPassword: !!admin.password, status: admin.status };
-    }
-    return { exists: false };
+    return {
+      exists: !!row,
+      email: row?.email,
+      hasPassword: row?.hasPassword,
+      role: row?.role,
+    };
+  }
+
+  @Get('admin/verify-token')
+  @UseGuards(JwtAuthGuard)
+  async verifyToken(@Req() req: any) {
+    console.log('[verify-token] User from JWT:', req.user);
+    return {
+      valid: true,
+      user: req.user,
+    };
   }
 
   @Get('admin/debug')
