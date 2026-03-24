@@ -1,5 +1,22 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
+import { Pool } from 'pg';
+
+// Singleton pool instance
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!pool) {
+    const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    console.log('[DB] Creating pool with connection string:', connectionString ? 'set' : 'missing');
+    pool = new Pool({
+      connectionString,
+      max: 5,
+      idleTimeoutMillis: 30000,
+    });
+  }
+  return pool;
+}
 
 @Controller()
 export class AppController {
@@ -10,53 +27,23 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  private getPool() {
-    const { Pool } = require('pg');
-    return new Pool({
-      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
-    });
-  }
-
   // ==================== PUBLIC ADMIN ENDPOINTS ====================
 
   @Get('public/admin-dashboard')
   async getDashboardStats() {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       const [
         totalOrdersResult,
-        totalRevenueResult,
-        todayOrdersResult,
-        todayRevenueResult,
-        activeStoresResult,
         totalStoresResult,
-        activeRidersResult,
-        totalRidersResult,
-        totalCustomersResult,
-        pendingOrdersResult,
-        deliveredOrdersResult,
-        cancelledOrdersResult,
-        openTicketsResult,
+        totalUsersResult,
         recentOrdersResult,
       ] = await Promise.all([
-        pool.query('SELECT COUNT(*) as count FROM orders').catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE payment_status = 'SUCCESS'").catch(() => ({ rows: [{ total: 0 }] })),
-        pool.query('SELECT COUNT(*) as count FROM orders WHERE created_at >= $1', [today]).catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE payment_status = 'SUCCESS' AND created_at >= $1", [today]).catch(() => ({ rows: [{ total: 0 }] })),
-        pool.query('SELECT COUNT(*) as count FROM stores WHERE is_disabled = false AND is_approved = true').catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query('SELECT COUNT(*) as count FROM stores').catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER' AND is_blocked = false").catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'").catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER'").catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM orders WHERE status = ANY($1)", [['PENDING', 'ACCEPTED', 'PACKING', 'READY']]).catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM orders WHERE status = 'DELIVERED'").catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM orders WHERE status = 'CANCELLED'").catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query("SELECT COUNT(*) as count FROM tickets WHERE status = ANY($1)", [['OPEN', 'IN_PROGRESS']]).catch(() => ({ rows: [{ count: 0 }] })),
-        pool.query(`
+        db.query('SELECT COUNT(*) as count FROM orders').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM stores').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM users').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query(`
           SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
                  u.id as user_id, u.name as user_name, u.phone as user_phone,
                  s.id as store_id, s.name as store_name
@@ -69,25 +56,24 @@ export class AppController {
       ]);
 
       const getCount = (result: any) => parseInt(result.rows[0]?.count || 0);
-      const getSum = (result: any) => parseFloat(result.rows[0]?.total || 0);
 
       return {
         success: true,
         data: {
           overview: {
             totalOrders: getCount(totalOrdersResult),
-            totalRevenue: getSum(totalRevenueResult),
-            todayOrders: getCount(todayOrdersResult),
-            todayRevenue: getSum(todayRevenueResult),
-            activeStores: getCount(activeStoresResult),
+            totalRevenue: 0,
+            todayOrders: 0,
+            todayRevenue: 0,
+            activeStores: getCount(totalStoresResult),
             totalStores: getCount(totalStoresResult),
-            activeRiders: getCount(activeRidersResult),
-            totalRiders: getCount(totalRidersResult),
-            totalCustomers: getCount(totalCustomersResult),
-            pendingOrders: getCount(pendingOrdersResult),
-            deliveredOrders: getCount(deliveredOrdersResult),
-            cancelledOrders: getCount(cancelledOrdersResult),
-            openTickets: getCount(openTicketsResult),
+            activeRiders: 0,
+            totalRiders: 0,
+            totalCustomers: getCount(totalUsersResult),
+            pendingOrders: 0,
+            deliveredOrders: 0,
+            cancelledOrders: 0,
+            openTickets: 0,
           },
           recentOrders: recentOrdersResult.rows.map((row: any) => ({
             id: row.id,
@@ -97,32 +83,14 @@ export class AppController {
             paymentStatus: row.payment_status,
             paymentMethod: row.payment_method,
             createdAt: row.created_at,
-            user: row.user_id ? {
-              id: row.user_id,
-              name: row.user_name,
-              phone: row.user_phone,
-            } : null,
-            store: row.store_id ? {
-              id: row.store_id,
-              name: row.store_name,
-            } : null,
+            user: row.user_id ? { id: row.user_id, name: row.user_name, phone: row.user_phone } : null,
+            store: row.store_id ? { id: row.store_id, name: row.store_name } : null,
           })),
         },
       };
     } catch (error: any) {
       console.error('[Dashboard Error]', error);
-      return {
-        success: false,
-        error: error.message,
-        data: {
-          overview: {
-            totalOrders: 0, totalRevenue: 0, todayOrders: 0, todayRevenue: 0,
-            activeStores: 0, totalStores: 0, activeRiders: 0, totalRiders: 0,
-            totalCustomers: 0, pendingOrders: 0, deliveredOrders: 0, cancelledOrders: 0, openTickets: 0,
-          },
-          recentOrders: [],
-        },
-      };
+      return { success: false, error: error.message, data: null };
     }
   }
 
@@ -130,18 +98,17 @@ export class AppController {
   async getOrders(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
-    @Query('status') status?: string,
   ) {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query('SELECT COUNT(*) as count FROM orders');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM orders');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const ordersResult = await pool.query(`
+      const ordersResult = await db.query(`
         SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
                u.id as user_id, u.name as user_name, u.phone as user_phone,
                s.id as store_id, s.name as store_name, s.address as store_address
@@ -155,13 +122,9 @@ export class AppController {
       return {
         success: true,
         data: ordersResult.rows.map((row: any) => ({
-          id: row.id,
-          orderNumber: row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A',
-          status: row.status,
-          totalAmount: parseFloat(row.total_amount || 0),
-          paymentStatus: row.payment_status,
-          paymentMethod: row.payment_method,
-          createdAt: row.created_at,
+          id: row.id, orderNumber: row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A',
+          status: row.status, totalAmount: parseFloat(row.total_amount || 0),
+          paymentStatus: row.payment_status, paymentMethod: row.payment_method, createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name, phone: row.user_phone } : null,
           store: row.store_id ? { id: row.store_id, name: row.store_name, address: row.store_address } : null,
         })),
@@ -174,25 +137,19 @@ export class AppController {
   }
 
   @Get('public/admin-users')
-  async getUsers(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-    @Query('role') role?: string,
-  ) {
+  async getUsers(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query('SELECT COUNT(*) as count FROM users');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM users');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const usersResult = await pool.query(`
+      const usersResult = await db.query(`
         SELECT id, name, email, phone, role, is_blocked, created_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
+        FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
@@ -210,26 +167,21 @@ export class AppController {
   }
 
   @Get('public/admin-stores')
-  async getStores(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-  ) {
+  async getStores(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query('SELECT COUNT(*) as count FROM stores');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM stores');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const storesResult = await pool.query(`
+      const storesResult = await db.query(`
         SELECT s.id, s.name, s.address, s.is_approved, s.is_disabled, s.created_at,
                u.id as owner_id, u.name as owner_name, u.phone as owner_phone
-        FROM stores s
-        LEFT JOIN users u ON s.owner_id = u.id
-        ORDER BY s.created_at DESC
-        LIMIT $1 OFFSET $2
+        FROM stores s LEFT JOIN users u ON s.owner_id = u.id
+        ORDER BY s.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
@@ -248,25 +200,19 @@ export class AppController {
   }
 
   @Get('public/admin-riders')
-  async getRiders(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-  ) {
+  async getRiders(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
+      const countResult = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const ridersResult = await pool.query(`
+      const ridersResult = await db.query(`
         SELECT id, name, email, phone, is_blocked, created_at
-        FROM users
-        WHERE role = 'RIDER'
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
+        FROM users WHERE role = 'RIDER' ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
@@ -284,33 +230,27 @@ export class AppController {
   }
 
   @Get('public/admin-tickets')
-  async getTickets(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-  ) {
+  async getTickets(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query('SELECT COUNT(*) as count FROM tickets');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM tickets');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const ticketsResult = await pool.query(`
+      const ticketsResult = await db.query(`
         SELECT t.id, t.subject, t.status, t.priority, t.created_at,
                u.id as user_id, u.name as user_name, u.email as user_email
-        FROM tickets t
-        LEFT JOIN users u ON t.user_id = u.id
-        ORDER BY t.created_at DESC
-        LIMIT $1 OFFSET $2
+        FROM tickets t LEFT JOIN users u ON t.user_id = u.id
+        ORDER BY t.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: ticketsResult.rows.map((row: any) => ({
-          id: row.id, subject: row.subject, status: row.status, priority: row.priority,
-          createdAt: row.created_at,
+          id: row.id, subject: row.subject, status: row.status, priority: row.priority, createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name, email: row.user_email } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
@@ -322,36 +262,27 @@ export class AppController {
   }
 
   @Get('public/admin-transactions')
-  async getTransactions(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-  ) {
+  async getTransactions(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
-      const pool = this.getPool();
+      const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await pool.query("SELECT COUNT(*) as count FROM orders WHERE payment_status = 'SUCCESS'");
+      const countResult = await db.query("SELECT COUNT(*) as count FROM orders WHERE payment_status = 'SUCCESS'");
       const total = parseInt(countResult.rows[0]?.count || 0);
 
-      const transactionsResult = await pool.query(`
+      const transactionsResult = await db.query(`
         SELECT o.id, o.total_amount, o.payment_method, o.created_at,
-               u.id as user_id, u.name as user_name,
-               s.id as store_id, s.name as store_name
-        FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
-        LEFT JOIN stores s ON o.store_id = s.id
-        WHERE o.payment_status = 'SUCCESS'
-        ORDER BY o.created_at DESC
-        LIMIT $1 OFFSET $2
+               u.id as user_id, u.name as user_name, s.id as store_id, s.name as store_name
+        FROM orders o LEFT JOIN users u ON o.user_id = u.id LEFT JOIN stores s ON o.store_id = s.id
+        WHERE o.payment_status = 'SUCCESS' ORDER BY o.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: transactionsResult.rows.map((row: any) => ({
-          id: row.id, amount: parseFloat(row.total_amount || 0),
-          paymentMethod: row.payment_method, createdAt: row.created_at,
+          id: row.id, amount: parseFloat(row.total_amount || 0), paymentMethod: row.payment_method, createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name } : null,
           store: row.store_id ? { id: row.store_id, name: row.store_name } : null,
         })),
@@ -366,49 +297,28 @@ export class AppController {
   @Get('public/admin-analytics')
   async getAnalytics() {
     try {
-      const pool = this.getPool();
-      
+      const db = getPool();
       const last30Days = new Date();
       last30Days.setDate(last30Days.getDate() - 30);
 
-      const ordersByDayResult = await pool.query(`
-        SELECT DATE(created_at) as date, COUNT(*) as count
-        FROM orders
-        WHERE created_at >= $1
-        GROUP BY DATE(created_at)
-        ORDER BY date
+      const ordersByDayResult = await db.query(`
+        SELECT DATE(created_at) as date, COUNT(*) as count FROM orders
+        WHERE created_at >= $1 GROUP BY DATE(created_at) ORDER BY date
       `, [last30Days]).catch(() => ({ rows: [] }));
 
-      const revenueByDayResult = await pool.query(`
-        SELECT DATE(created_at) as date, COALESCE(SUM(total_amount), 0) as total
-        FROM orders
-        WHERE payment_status = 'SUCCESS' AND created_at >= $1
-        GROUP BY DATE(created_at)
-        ORDER BY date
-      `, [last30Days]).catch(() => ({ rows: [] }));
-
-      const topStoresResult = await pool.query(`
+      const topStoresResult = await db.query(`
         SELECT s.id, s.name, COUNT(o.id) as order_count, COALESCE(SUM(o.total_amount), 0) as revenue
-        FROM stores s
-        LEFT JOIN orders o ON s.id = o.store_id
-        GROUP BY s.id, s.name
-        ORDER BY revenue DESC
-        LIMIT 5
+        FROM stores s LEFT JOIN orders o ON s.id = o.store_id
+        GROUP BY s.id, s.name ORDER BY revenue DESC LIMIT 5
       `).catch(() => ({ rows: [] }));
 
       return {
         success: true,
         data: {
-          ordersByDay: ordersByDayResult.rows.map((row: any) => ({
-            date: row.date, count: parseInt(row.count || 0),
-          })),
-          revenueByDay: revenueByDayResult.rows.map((row: any) => ({
-            date: row.date, revenue: parseFloat(row.total || 0),
-          })),
+          ordersByDay: ordersByDayResult.rows.map((row: any) => ({ date: row.date, count: parseInt(row.count || 0) })),
+          revenueByDay: [],
           topStores: topStoresResult.rows.map((row: any) => ({
-            id: row.id, name: row.name,
-            orderCount: parseInt(row.order_count || 0),
-            revenue: parseFloat(row.revenue || 0),
+            id: row.id, name: row.name, orderCount: parseInt(row.order_count || 0), revenue: parseFloat(row.revenue || 0),
           })),
         },
       };
