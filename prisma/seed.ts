@@ -4,23 +4,26 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Seed Admin User
-  const adminPassword = await bcrypt.hash('admin123', 12);
-  const admin = await prisma.admin.upsert({
-    where: { email: 'shreyasma055@gmail.com' },
-    create: {
-      email: 'shreyasma055@gmail.com',
-      name: 'Super Admin',
-      password: adminPassword,
-      role: 'admin',
-      status: 'active',
-    },
-    update: {
-      password: adminPassword,
-      status: 'active',
-    },
+  // Seed Admin User - only create if not exists, don't overwrite password
+  const existingAdmin = await prisma.admin.findUnique({
+    where: { email: 'shreysm8055@gmail.com' },
   });
-  console.log('✅ Admin user seeded:', admin.email);
+  
+  if (!existingAdmin) {
+    const adminPassword = await bcrypt.hash('outfytlogin@01', 12);
+    await prisma.admin.create({
+      data: {
+        email: 'shreysm8055@gmail.com',
+        name: 'Super Admin',
+        password: adminPassword,
+        role: 'admin',
+        status: 'active',
+      },
+    });
+    console.log('✅ Admin user created: shreysm8055@gmail.com');
+  } else {
+    console.log('✅ Admin user already exists: shreysm8055@gmail.com');
+  }
 
   // Seed Categories
   const categories = await Promise.all([
