@@ -10,19 +10,16 @@ import { AuthService } from './auth.service';
 import { WebAuthController } from './web-auth.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 
+// Hardcoded secret for consistency - in production this should be an env variable
+const JWT_SECRET = 'outfyt-jwt-secret-key-change-in-production';
+
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('SUPABASE_JWT_SECRET') || 
-                configService.get<string>('JWT_SECRET') || 
-                'outfyt-jwt-secret-key-change-in-production',
-        signOptions: { expiresIn: '7d' },
-      }),
-      inject: [ConfigService],
+    JwtModule.register({
+      secret: JWT_SECRET,
+      signOptions: { expiresIn: '7d' },
     }),
     PrismaModule,
   ],

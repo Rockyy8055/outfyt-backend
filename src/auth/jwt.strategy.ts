@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from './roles.enum';
@@ -9,18 +8,18 @@ export type JwtPayload = {
   role: Role;
 };
 
+// Same hardcoded secret as auth.module.ts
+const JWT_SECRET = 'outfyt-jwt-secret-key-change-in-production';
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
-    const secret = configService.get<string>('SUPABASE_JWT_SECRET') || 
-                   configService.get<string>('JWT_SECRET') || 
-                   'outfyt-jwt-secret-key-change-in-production';
-    console.log('[JwtStrategy] Using secret:', secret ? secret.substring(0, 10) + '...' : 'none');
+  constructor() {
+    console.log('[JwtStrategy] Using hardcoded secret');
     
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: JWT_SECRET,
     });
   }
 
