@@ -107,52 +107,71 @@ export class AuthService {
   }
 
   async adminLogin(input: { email: string; password: string }) {
+    this.logger.log('Admin login attempt for:', input.email);
+    
+    let admin;
     try {
-      const admin = await this.prisma.admin.findUnique({
+      admin = await this.prisma.admin.findUnique({
         where: { email: input.email },
       });
-
-      if (!admin || !admin.password) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      if (admin.status !== 'active') {
-        throw new UnauthorizedException('Account is deactivated');
-      }
-
-      const isValid = await bcrypt.compare(input.password, admin.password);
-      if (!isValid) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // Try to update lastLogin, but don't fail if it errors
-      try {
-        await this.prisma.admin.update({
-          where: { id: admin.id },
-          data: { lastLogin: new Date() },
-        });
-      } catch (e) {
-        this.logger.warn('Could not update lastLogin:', e);
-      }
-
-      this.logger.log(`Admin logged in: ${admin.email}`);
-
-      const token = await this.signToken({ userId: admin.id, role: admin.role as Role });
-
-      return {
-        admin: {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          role: admin.role,
-          avatar: admin.avatar,
-        },
-        accessToken: token,
-      };
-    } catch (error) {
-      this.logger.error('Admin login error:', error);
-      throw error;
+      this.logger.log('Found admin:', admin ? admin.email : 'not found');
+    } catch (e) {
+      this.logger.error('Error finding admin:', e);
+      throw new UnauthorizedException('Database error');
     }
+
+    if (!admin || !admin.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (admin.status !== 'active') {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    let isValid;
+    try {
+      isValid = await bcrypt.compare(input.password, admin.password);
+      this.logger.log('Password valid:', isValid);
+    } catch (e) {
+      this.logger.error('Error comparing password:', e);
+      throw new UnauthorizedException('Auth error');
+    }
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Try to update lastLogin, but don't fail if it errors
+    try {
+      await this.prisma.admin.update({
+        where: { id: admin.id },
+        data: { lastLogin: new Date() },
+      });
+    } catch (e) {
+      this.logger.warn('Could not update lastLogin:', e);
+    }
+
+    this.logger.log(`Admin logged in: ${admin.email}`);
+
+    let token;
+    try {
+      token = await this.signToken({ userId: admin.id, role: admin.role as Role });
+      this.logger.log('Token generated successfully');
+    } catch (e) {
+      this.logger.error('Error generating token:', e);
+      throw new UnauthorizedException('Token generation failed');
+    }
+
+    return {
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name || 'Admin',
+        role: admin.role || 'admin',
+        avatar: admin.avatar,
+      },
+      accessToken: token,
+    };
   }
 
   async adminForgotPassword(email: string) {
