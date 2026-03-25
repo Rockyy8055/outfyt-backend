@@ -34,30 +34,41 @@ export class AppController {
     try {
       const db = getPool();
       
-      // Check actual data counts
-      const ordersCount = await db.query('SELECT COUNT(*) as count FROM orders');
-      const storesCount = await db.query('SELECT COUNT(*) as count FROM stores');
-      const usersCount = await db.query('SELECT COUNT(*) as count FROM users');
-      const ridersCount = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
+      // List all tables in all schemas
+      const allTables = await db.query(`
+        SELECT table_schema, table_name 
+        FROM information_schema.tables 
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY table_schema, table_name
+      `);
       
-      // Get sample data
-      const sampleOrders = await db.query('SELECT * FROM orders LIMIT 3');
-      const sampleStores = await db.query('SELECT * FROM stores LIMIT 3');
-      const sampleUsers = await db.query('SELECT id, email, phone, role, created_at FROM users LIMIT 5');
+      // Check counts in all likely tables
+      const counts: any = {};
+      const sampleData: any = {};
+      
+      for (const table of allTables.rows) {
+        const schema = table.table_schema;
+        const tableName = table.table_name;
+        const fullTableName = `"${schema}"."${tableName}"`;
+        
+        try {
+          const countResult = await db.query(`SELECT COUNT(*) as count FROM ${fullTableName}`);
+          counts[`${schema}.${tableName}`] = parseInt(countResult.rows[0]?.count || 0);
+          
+          if (parseInt(countResult.rows[0]?.count || 0) > 0) {
+            const sampleResult = await db.query(`SELECT * FROM ${fullTableName} LIMIT 2`);
+            sampleData[`${schema}.${tableName}`] = sampleResult.rows;
+          }
+        } catch (e: any) {
+          counts[`${schema}.${tableName}`] = `Error: ${e.message}`;
+        }
+      }
 
       return {
         success: true,
-        counts: {
-          orders: parseInt(ordersCount.rows[0]?.count || 0),
-          stores: parseInt(storesCount.rows[0]?.count || 0),
-          users: parseInt(usersCount.rows[0]?.count || 0),
-          riders: parseInt(ridersCount.rows[0]?.count || 0),
-        },
-        sampleData: {
-          orders: sampleOrders.rows,
-          stores: sampleStores.rows,
-          users: sampleUsers.rows,
-        }
+        allTables: allTables.rows,
+        counts,
+        sampleData
       };
     } catch (error: any) {
       return { success: false, error: error.message };
