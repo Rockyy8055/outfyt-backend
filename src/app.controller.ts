@@ -29,6 +29,38 @@ export class AppController {
 
   // ==================== PUBLIC ADMIN ENDPOINTS ====================
 
+  @Get('public/debug-tables')
+  async debugTables() {
+    try {
+      const db = getPool();
+      
+      const usersColumns = await db.query(`
+        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users'
+      `);
+      const ordersColumns = await db.query(`
+        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'orders'
+      `);
+      const storesColumns = await db.query(`
+        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'stores'
+      `);
+      const ticketsColumns = await db.query(`
+        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'tickets'
+      `);
+
+      return {
+        success: true,
+        tables: {
+          users: usersColumns.rows,
+          orders: ordersColumns.rows,
+          stores: storesColumns.rows,
+          tickets: ticketsColumns.rows,
+        }
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
   @Get('public/admin-dashboard')
   async getDashboardStats() {
     try {
