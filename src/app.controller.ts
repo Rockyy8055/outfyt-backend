@@ -171,7 +171,7 @@ export class AppController {
 
       if (search) {
         const searchPattern = `%${search}%`;
-        conditions.push(`("orderNumber" ILIKE $${paramIndex} OR "customerName" ILIKE $${paramIndex} OR "customerPhone" ILIKE $${paramIndex} OR id ILIKE $${paramIndex})`);
+        conditions.push(`("orderNumber" ILIKE $${paramIndex} OR "customerName" ILIKE $${paramIndex} OR "customerPhone" ILIKE $${paramIndex} OR id ILIKE $${paramIndex} OR "storeName" ILIKE $${paramIndex})`);
         params.push(searchPattern);
         paramIndex++;
       }
