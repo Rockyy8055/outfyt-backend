@@ -34,29 +34,16 @@ export class AppController {
     try {
       const db = getPool();
       
-      const usersColumns = await db.query(`
-        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users'
-      `);
-      const ordersColumns = await db.query(`
-        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'orders'
-      `);
-      const storesColumns = await db.query(`
-        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'stores'
-      `);
-      const ticketsColumns = await db.query(`
-        SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'tickets'
-      `);
-      
       // Check actual data counts
       const ordersCount = await db.query('SELECT COUNT(*) as count FROM orders');
       const storesCount = await db.query('SELECT COUNT(*) as count FROM stores');
-      const usersCount = await db.query('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL');
+      const usersCount = await db.query('SELECT COUNT(*) as count FROM users');
       const ridersCount = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
       
-      // Get sample orders
-      const sampleOrders = await db.query('SELECT * FROM orders LIMIT 5');
-      const sampleStores = await db.query('SELECT id, name, store_name, is_active FROM stores LIMIT 5');
-      const sampleUsers = await db.query('SELECT id, email, role, raw_user_meta_data FROM users WHERE email IS NOT NULL LIMIT 5');
+      // Get sample data
+      const sampleOrders = await db.query('SELECT * FROM orders LIMIT 3');
+      const sampleStores = await db.query('SELECT * FROM stores LIMIT 3');
+      const sampleUsers = await db.query('SELECT id, email, phone, role, created_at FROM users LIMIT 5');
 
       return {
         success: true,
@@ -70,12 +57,6 @@ export class AppController {
           orders: sampleOrders.rows,
           stores: sampleStores.rows,
           users: sampleUsers.rows,
-        },
-        tables: {
-          users: usersColumns.rows,
-          orders: ordersColumns.rows,
-          stores: storesColumns.rows,
-          tickets: ticketsColumns.rows,
         }
       };
     } catch (error: any) {
