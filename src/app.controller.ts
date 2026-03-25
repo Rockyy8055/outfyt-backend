@@ -79,18 +79,31 @@ export class AppController {
   async getDashboardStats() {
     try {
       const db = getPool();
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       
       const [
         totalOrdersResult,
+        totalRevenueResult,
+        todayOrdersResult,
+        todayRevenueResult,
         totalStoresResult,
         totalUsersResult,
         totalRidersResult,
+        pendingOrdersResult,
+        deliveredOrdersResult,
+        cancelledOrdersResult,
         recentOrdersResult,
       ] = await Promise.all([
         db.query('SELECT COUNT(*) as count FROM "Order"').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COALESCE(SUM("totalAmount"), 0) as total FROM "Order" WHERE status = $1', ['DELIVERED']).catch(() => ({ rows: [{ total: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM "Order" WHERE DATE("createdAt") = $1', [today]).catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COALESCE(SUM("totalAmount"), 0) as total FROM "Order" WHERE DATE("createdAt") = $1 AND status = $2', [today, 'DELIVERED']).catch(() => ({ rows: [{ total: 0 }] })),
         db.query('SELECT COUNT(*) as count FROM "Store"').catch(() => ({ rows: [{ count: 0 }] })),
         db.query('SELECT COUNT(*) as count FROM "User"').catch(() => ({ rows: [{ count: 0 }] })),
         db.query('SELECT COUNT(*) as count FROM delivery_partners').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM "Order" WHERE status = $1', ['PENDING']).catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM "Order" WHERE status = $1', ['DELIVERED']).catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM "Order" WHERE status = $1', ['CANCELLED']).catch(() => ({ rows: [{ count: 0 }] })),
         db.query(`
           SELECT o.id, o."orderNumber", o.status, o."totalAmount", o."paymentStatus", o."paymentMethod", o."createdAt", o."storeName"
           FROM "Order" o
@@ -100,23 +113,24 @@ export class AppController {
       ]);
 
       const getCount = (result: any) => parseInt(result.rows[0]?.count || 0);
+      const getAmount = (result: any) => parseFloat(result.rows[0]?.total || 0);
 
       return {
         success: true,
         data: {
           overview: {
             totalOrders: getCount(totalOrdersResult),
-            totalRevenue: 0,
-            todayOrders: 0,
-            todayRevenue: 0,
+            totalRevenue: getAmount(totalRevenueResult),
+            todayOrders: getCount(todayOrdersResult),
+            todayRevenue: getAmount(todayRevenueResult),
             activeStores: getCount(totalStoresResult),
             totalStores: getCount(totalStoresResult),
             activeRiders: getCount(totalRidersResult),
             totalRiders: getCount(totalRidersResult),
             totalCustomers: getCount(totalUsersResult),
-            pendingOrders: 0,
-            deliveredOrders: 0,
-            cancelledOrders: 0,
+            pendingOrders: getCount(pendingOrdersResult),
+            deliveredOrders: getCount(deliveredOrdersResult),
+            cancelledOrders: getCount(cancelledOrdersResult),
             openTickets: 0,
           },
           recentOrders: recentOrdersResult.rows.map((row: any) => ({
