@@ -17,6 +17,8 @@ import { TrackingGateway } from '../tracking/tracking.gateway';
 import { RidersService } from '../riders/riders.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PackingTimerService } from './packing-timer.service';
+import { calculateOrderFinancials, validateOrderFinancials } from '../../utils/pricing.util';
+import { processOrderPayouts } from '../../services/wallet.service';
 
 @Injectable()
 export class OrdersService {
@@ -40,10 +42,18 @@ export class OrdersService {
     otpCode: string;
     totalAmount: number;
     paymentStatus: PaymentStatus;
+    financials: {
+      productAmount: number;
+      deliveryFee: number;
+      platformFee: number;
+      packingCharge: number;
+      gstAmount: number;
+      distanceKm: number;
+    };
   }> {
     const store = await this.prisma.store.findUnique({
       where: { id: input.dto.storeId },
-      select: { id: true },
+      select: { id: true, latitude: true, longitude: true },
     });
 
     if (!store) throw new NotFoundException('Store not found');
@@ -90,10 +100,25 @@ export class OrdersService {
       }
     }
 
-    const totalAmount = items.reduce((sum, i) => {
+    const productAmount = items.reduce((sum, i) => {
       const product = productMap.get(i.productId);
       return sum + (product?.price ?? 0) * i.quantity;
     }, 0);
+
+    // Calculate full financial breakdown using pricing engine
+    const financials = calculateOrderFinancials(
+      productAmount,
+      store.latitude,
+      store.longitude,
+      input.dto.deliveryLat,
+      input.dto.deliveryLng
+    );
+
+    // Validate financials
+    const validation = validateOrderFinancials(financials);
+    if (!validation.valid) {
+      this.logger.warn(`Financial validation warnings: ${validation.errors.join(', ')}`);
+    }
 
     const orderNumber = await this.generateOrderNumber();
     const otpCode = this.generateOtp();
@@ -121,11 +146,23 @@ export class OrdersService {
           status: OrderStatus.PENDING,
           paymentMethod: input.dto.paymentMethod,
           paymentStatus,
-          totalAmount,
+          totalAmount: financials.totalAmount,
           otpCode,
           deliveryLat: input.dto.deliveryLat,
           deliveryLng: input.dto.deliveryLng,
           deliveryAddress: input.dto.deliveryAddress,
+          // Financial breakdown
+          distanceKm: financials.distanceKm,
+          productAmount: financials.productAmount,
+          deliveryFee: financials.deliveryFee,
+          riderEarning: financials.riderEarning,
+          deliveryMargin: financials.deliveryMargin,
+          commissionAmount: financials.commissionAmount,
+          platformFee: financials.platformFee,
+          packingCharge: financials.packingCharge,
+          gstAmount: financials.gstAmount,
+          storeEarning: financials.storeEarning,
+          platformEarning: financials.platformEarning,
           items: {
             create: items.map((i) => {
               const product = productMap.get(i.productId);
@@ -220,6 +257,14 @@ export class OrdersService {
       otpCode: created.otpCode,
       totalAmount: created.totalAmount,
       paymentStatus: created.paymentStatus,
+      financials: {
+        productAmount: financials.productAmount,
+        deliveryFee: financials.deliveryFee,
+        platformFee: financials.platformFee,
+        packingCharge: financials.packingCharge,
+        gstAmount: financials.gstAmount,
+        distanceKm: financials.distanceKm,
+      },
     };
   }
 
@@ -262,8 +307,33 @@ export class OrdersService {
     const updated = await this.prisma.order.update({
       where: { id: order.id },
       data: { status: input.dto.status },
-      select: { id: true, status: true, storeId: true, riderId: true, orderNumber: true, userId: true },
+      select: { 
+        id: true, 
+        status: true, 
+        storeId: true, 
+        riderId: true, 
+        orderNumber: true, 
+        userId: true,
+        storeEarning: true,
+        riderEarning: true,
+      },
     });
+
+    // Process wallet payouts when order is delivered
+    if (updated.status === OrderStatus.DELIVERED && updated.riderId) {
+      try {
+        await processOrderPayouts(
+          updated.id,
+          updated.storeId,
+          updated.riderId,
+          updated.storeEarning,
+          updated.riderEarning
+        );
+        this.logger.log(`Wallet payouts processed for order ${updated.id}: Store +${updated.storeEarning}, Rider +${updated.riderEarning}`);
+      } catch (error) {
+        this.logger.error(`Failed to process wallet payouts for order ${updated.id}:`, error);
+      }
+    }
 
     // Start packing timer when order is accepted
     if (updated.status === OrderStatus.ACCEPTED) {

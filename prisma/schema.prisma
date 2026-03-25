@@ -68,6 +68,69 @@ model Store {
   tags        String[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  wallet      StoreWallet?
+}
+
+model StoreWallet {
+  id                  String   @id @default(uuid())
+  storeId             String   @unique
+  totalEarnings       Float    @default(0)
+  withdrawableBalance Float    @default(0)
+  pendingBalance      Float    @default(0)
+  totalWithdrawn      Float    @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  store               Store    @relation(fields: [storeId], references: [id])
+  transactions        WalletTransaction[]
+}
+
+model RiderWallet {
+  id                  String   @id @default(uuid())
+  riderId             String   @unique
+  totalEarnings       Float    @default(0)
+  withdrawableBalance Float    @default(0)
+  pendingBalance      Float    @default(0)
+  totalWithdrawn      Float    @default(0)
+  todayEarnings       Float    @default(0)
+  weeklyEarnings      Float    @default(0)
+  totalDeliveries     Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  transactions        WalletTransaction[]
+}
+
+model WalletTransaction {
+  id              String              @id @default(uuid())
+  walletType      WalletType
+  storeWalletId   String?
+  riderWalletId   String?
+  amount          Float
+  type            WalletTransactionType
+  status          TransactionStatus   @default(PENDING)
+  orderId         String?
+  description     String?
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  storeWallet     StoreWallet?        @relation(fields: [storeWalletId], references: [id])
+  riderWallet     RiderWallet?        @relation(fields: [riderWalletId], references: [id])
+}
+
+enum WalletType {
+  STORE
+  RIDER
+}
+
+enum WalletTransactionType {
+  ORDER_EARNING
+  DELIVERY_EARNING
+  WITHDRAWAL
+  REFUND
+  ADJUSTMENT
 }
 
 model Product {
@@ -108,13 +171,27 @@ model Order {
   paymentMethod    PaymentMethod
   paymentStatus    PaymentStatus
   totalAmount      Float
-  amountReceived    Float?
+  amountReceived   Float?
   otpCode          String
   deliveryLat      Float
   deliveryLng      Float
   deliveryAddress  String?
   packingStartedAt DateTime?
   rejectionReason  String?
+  
+  // Financial breakdown fields
+  distanceKm       Float         @default(0)
+  productAmount    Float         @default(0)
+  deliveryFee      Float         @default(0)
+  riderEarning     Float         @default(0)
+  deliveryMargin   Float         @default(0)
+  commissionAmount Float         @default(0)
+  platformFee      Float         @default(15)
+  packingCharge    Float         @default(20)
+  gstAmount        Float         @default(0)
+  storeEarning     Float         @default(0)
+  platformEarning  Float         @default(0)
+  
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
