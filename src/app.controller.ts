@@ -222,7 +222,7 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const storesResult = await db.query(`
-        SELECT id, name, address, "isActive", "isOpen", "createdAt", "ownerId"
+        SELECT id, name, address, "isApproved", "isDisabled", "isOnline", "createdAt", "ownerId"
         FROM "Store"
         ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
@@ -231,7 +231,7 @@ export class AppController {
         success: true,
         data: storesResult.rows.map((row: any) => ({
           id: row.id, name: row.name, address: row.address,
-          isActive: row.isActive, isOpen: row.isOpen, createdAt: row.createdAt,
+          isApproved: row.isApproved, isDisabled: row.isDisabled, isOnline: row.isOnline, createdAt: row.createdAt,
           owner: row.ownerId ? { id: row.ownerId } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
