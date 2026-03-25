@@ -141,11 +141,10 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ordersResult = await db.query(`
-        SELECT o.*, 
-               u.id as user_id, u.name as user_name, u.phone as user_phone,
-               s.id as store_id, s.name as store_name, s.address as store_address
+        SELECT o.id, o.order_number, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
+               o.store_name, o.user_id,
+               s.name as store_name_actual
         FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
         LEFT JOIN stores s ON o.store_id = s.id
         ORDER BY o.created_at DESC
         LIMIT $1 OFFSET $2
@@ -154,13 +153,15 @@ export class AppController {
       return {
         success: true,
         data: ordersResult.rows.map((row: any) => ({
-          id: row.id, orderNumber: row.order_number || (row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A'),
-          status: row.status, totalAmount: parseFloat(row.total_amount || 0),
+          id: row.id, 
+          orderNumber: row.order_number || (row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A'),
+          status: row.status, 
+          totalAmount: parseFloat(row.total_amount || 0),
           paymentStatus: row.payment_status, 
           paymentMethod: row.payment_method, 
           createdAt: row.created_at,
-          user: row.user_id ? { id: row.user_id, name: row.user_name, phone: row.user_phone } : null,
-          store: row.store_id ? { id: row.store_id, name: row.store_name, address: row.store_address } : null,
+          user: row.user_id ? { id: row.user_id } : null,
+          store: { id: row.store_id, name: row.store_name || row.store_name_actual },
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -178,19 +179,23 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM users');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const usersResult = await db.query(`
-        SELECT id, name, email, phone, role, is_blocked, created_at
-        FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2
+        SELECT id, email, phone, role, 
+               raw_user_meta_data->>'name' as name,
+               raw_user_meta_data->>'is_blocked' as is_blocked,
+               created_at
+        FROM users WHERE email IS NOT NULL
+        ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: usersResult.rows.map((row: any) => ({
-          id: row.id, name: row.name, email: row.email, phone: row.phone,
-          role: row.role, isBlocked: row.is_blocked, createdAt: row.created_at,
+          id: row.id, name: row.name || 'N/A', email: row.email, phone: row.phone,
+          role: row.role, isBlocked: row.is_blocked === 'true', createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -212,18 +217,18 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const storesResult = await db.query(`
-        SELECT s.id, s.name, s.address, s.is_approved, s.is_disabled, s.created_at,
-               u.id as owner_id, u.name as owner_name, u.phone as owner_phone
-        FROM stores s LEFT JOIN users u ON s.owner_id = u.id
+        SELECT s.id, s.name, s.store_name, s.address_line, s.is_active, s.created_at,
+               s.owner_id
+        FROM stores s
         ORDER BY s.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: storesResult.rows.map((row: any) => ({
-          id: row.id, name: row.name, address: row.address,
-          isApproved: row.is_approved, isDisabled: row.is_disabled, createdAt: row.created_at,
-          owner: row.owner_id ? { id: row.owner_id, name: row.owner_name, phone: row.owner_phone } : null,
+          id: row.id, name: row.name || row.store_name, address: row.address_line,
+          isApproved: row.is_active, isDisabled: !row.is_active, createdAt: row.created_at,
+          owner: row.owner_id ? { id: row.owner_id } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -241,19 +246,22 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['RIDER']);
+      const countResult = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ridersResult = await db.query(`
-        SELECT id, name, email, phone, is_blocked, created_at
-        FROM users WHERE role = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
-      `, ['RIDER', limitNum, offset]);
+        SELECT id, email, phone, role,
+               raw_user_meta_data->>'name' as name,
+               raw_user_meta_data->>'is_blocked' as is_blocked,
+               created_at
+        FROM users WHERE role = 'RIDER' ORDER BY created_at DESC LIMIT $1 OFFSET $2
+      `, [limitNum, offset]);
 
       return {
         success: true,
         data: ridersResult.rows.map((row: any) => ({
-          id: row.id, name: row.name, email: row.email, phone: row.phone,
-          isBlocked: row.is_blocked, createdAt: row.created_at,
+          id: row.id, name: row.name || 'N/A', email: row.email, phone: row.phone,
+          isBlocked: row.is_blocked === 'true', createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -267,6 +275,15 @@ export class AppController {
   async getTickets(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     try {
       const db = getPool();
+      // Check if tickets table exists
+      const tableCheck = await db.query(`
+        SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'tickets')
+      `);
+      
+      if (!tableCheck.rows[0]?.exists) {
+        return { success: true, data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } };
+      }
+
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
@@ -275,18 +292,14 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ticketsResult = await db.query(`
-        SELECT t.id, t.subject, t.status, t.priority, t.created_at,
-               u.id as user_id, u.name as user_name, u.email as user_email
+        SELECT t.*, u.email as user_email
         FROM tickets t LEFT JOIN users u ON t.user_id = u.id
         ORDER BY t.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
-        data: ticketsResult.rows.map((row: any) => ({
-          id: row.id, subject: row.subject, status: row.status, priority: row.priority, createdAt: row.created_at,
-          user: row.user_id ? { id: row.user_id, name: row.user_name, email: row.user_email } : null,
-        })),
+        data: ticketsResult.rows,
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
     } catch (error: any) {
@@ -303,22 +316,20 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM orders WHERE payment_status = $1', ['SUCCESS']);
+      const countResult = await db.query("SELECT COUNT(*) as count FROM orders WHERE payment_status = 'SUCCESS'");
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const transactionsResult = await db.query(`
-        SELECT o.id, o.total_amount, o.payment_method, o.created_at,
-               u.id as user_id, u.name as user_name, s.id as store_id, s.name as store_name
-        FROM orders o LEFT JOIN users u ON o.user_id = u.id LEFT JOIN stores s ON o.store_id = s.id
-        WHERE o.payment_status = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3
-      `, ['SUCCESS', limitNum, offset]);
+        SELECT o.id, o.total_amount, o.payment_method, o.created_at, o.store_name
+        FROM orders o
+        WHERE o.payment_status = 'SUCCESS' ORDER BY o.created_at DESC LIMIT $1 OFFSET $2
+      `, [limitNum, offset]);
 
       return {
         success: true,
         data: transactionsResult.rows.map((row: any) => ({
           id: row.id, amount: parseFloat(row.total_amount || 0), paymentMethod: row.payment_method, createdAt: row.created_at,
-          user: row.user_id ? { id: row.user_id, name: row.user_name } : null,
-          store: row.store_id ? { id: row.store_id, name: row.store_name } : null,
+          store: { name: row.store_name },
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -341,9 +352,8 @@ export class AppController {
       `, [last30Days]).catch(() => ({ rows: [] }));
 
       const topStoresResult = await db.query(`
-        SELECT s.id, s.name, COUNT(o.id) as order_count, COALESCE(SUM(o.total_amount), 0) as revenue
-        FROM stores s LEFT JOIN orders o ON s.id = o.store_id
-        GROUP BY s.id, s.name ORDER BY revenue DESC LIMIT 5
+        SELECT store_name, COUNT(*) as order_count, COALESCE(SUM(total_amount), 0) as revenue
+        FROM orders GROUP BY store_name ORDER BY revenue DESC LIMIT 5
       `).catch(() => ({ rows: [] }));
 
       return {
@@ -352,7 +362,7 @@ export class AppController {
           ordersByDay: ordersByDayResult.rows.map((row: any) => ({ date: row.date, count: parseInt(row.count || 0) })),
           revenueByDay: [],
           topStores: topStoresResult.rows.map((row: any) => ({
-            id: row.id, name: row.name, orderCount: parseInt(row.order_count || 0), revenue: parseFloat(row.revenue || 0),
+            name: row.store_name, orderCount: parseInt(row.order_count || 0), revenue: parseFloat(row.revenue || 0),
           })),
         },
       };
