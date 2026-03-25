@@ -113,20 +113,20 @@ export class AppController {
                u.id as user_id, u.name as user_name, u.phone as user_phone,
                s.id as store_id, s.name as store_name, s.address as store_address
         FROM orders o
-        LEFT JOIN users u ON o."userId" = u.id
-        LEFT JOIN stores s ON o."storeId" = s.id
-        ORDER BY o."createdAt" DESC
+        LEFT JOIN users u ON o.user_id = u.id
+        LEFT JOIN stores s ON o.store_id = s.id
+        ORDER BY o.created_at DESC
         LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: ordersResult.rows.map((row: any) => ({
-          id: row.id, orderNumber: row.orderNumber || (row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A'),
-          status: row.status, totalAmount: parseFloat(row.totalAmount || row.total_amount || 0),
-          paymentStatus: row.paymentStatus || row.payment_status, 
-          paymentMethod: row.paymentMethod || row.payment_method, 
-          createdAt: row.createdAt || row.created_at,
+          id: row.id, orderNumber: row.order_number || (row.id ? row.id.slice(0, 8).toUpperCase() : 'N/A'),
+          status: row.status, totalAmount: parseFloat(row.total_amount || 0),
+          paymentStatus: row.payment_status, 
+          paymentMethod: row.payment_method, 
+          createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name, phone: row.user_phone } : null,
           store: row.store_id ? { id: row.store_id, name: row.store_name, address: row.store_address } : null,
         })),
@@ -150,15 +150,15 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const usersResult = await db.query(`
-        SELECT id, name, email, phone, role, "isBlocked", "createdAt"
-        FROM users ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2
+        SELECT id, name, email, phone, role, is_blocked, created_at
+        FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: usersResult.rows.map((row: any) => ({
           id: row.id, name: row.name, email: row.email, phone: row.phone,
-          role: row.role, isBlocked: row.isBlocked, createdAt: row.createdAt,
+          role: row.role, isBlocked: row.is_blocked, createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -180,17 +180,17 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const storesResult = await db.query(`
-        SELECT s.id, s.name, s.address, s."isApproved", s."isDisabled", s."createdAt",
+        SELECT s.id, s.name, s.address, s.is_approved, s.is_disabled, s.created_at,
                u.id as owner_id, u.name as owner_name, u.phone as owner_phone
-        FROM stores s LEFT JOIN users u ON s."ownerId" = u.id
-        ORDER BY s."createdAt" DESC LIMIT $1 OFFSET $2
+        FROM stores s LEFT JOIN users u ON s.owner_id = u.id
+        ORDER BY s.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: storesResult.rows.map((row: any) => ({
           id: row.id, name: row.name, address: row.address,
-          isApproved: row.isApproved, isDisabled: row.isDisabled, createdAt: row.createdAt,
+          isApproved: row.is_approved, isDisabled: row.is_disabled, createdAt: row.created_at,
           owner: row.owner_id ? { id: row.owner_id, name: row.owner_name, phone: row.owner_phone } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
@@ -213,15 +213,15 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ridersResult = await db.query(`
-        SELECT id, name, email, phone, "isBlocked", "createdAt"
-        FROM users WHERE role = $1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3
+        SELECT id, name, email, phone, is_blocked, created_at
+        FROM users WHERE role = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
       `, ['RIDER', limitNum, offset]);
 
       return {
         success: true,
         data: ridersResult.rows.map((row: any) => ({
           id: row.id, name: row.name, email: row.email, phone: row.phone,
-          isBlocked: row.isBlocked, createdAt: row.createdAt,
+          isBlocked: row.is_blocked, createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -243,16 +243,16 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ticketsResult = await db.query(`
-        SELECT t.id, t.subject, t.status, t.priority, t."createdAt",
+        SELECT t.id, t.subject, t.status, t.priority, t.created_at,
                u.id as user_id, u.name as user_name, u.email as user_email
-        FROM tickets t LEFT JOIN users u ON t."userId" = u.id
-        ORDER BY t."createdAt" DESC LIMIT $1 OFFSET $2
+        FROM tickets t LEFT JOIN users u ON t.user_id = u.id
+        ORDER BY t.created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: ticketsResult.rows.map((row: any) => ({
-          id: row.id, subject: row.subject, status: row.status, priority: row.priority, createdAt: row.createdAt,
+          id: row.id, subject: row.subject, status: row.status, priority: row.priority, createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name, email: row.user_email } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
@@ -271,20 +271,20 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM orders WHERE "paymentStatus" = $1', ['SUCCESS']);
+      const countResult = await db.query('SELECT COUNT(*) as count FROM orders WHERE payment_status = $1', ['SUCCESS']);
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const transactionsResult = await db.query(`
-        SELECT o.id, o."totalAmount", o."paymentMethod", o."createdAt",
+        SELECT o.id, o.total_amount, o.payment_method, o.created_at,
                u.id as user_id, u.name as user_name, s.id as store_id, s.name as store_name
-        FROM orders o LEFT JOIN users u ON o."userId" = u.id LEFT JOIN stores s ON o."storeId" = s.id
-        WHERE o."paymentStatus" = $1 ORDER BY o."createdAt" DESC LIMIT $2 OFFSET $3
+        FROM orders o LEFT JOIN users u ON o.user_id = u.id LEFT JOIN stores s ON o.store_id = s.id
+        WHERE o.payment_status = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3
       `, ['SUCCESS', limitNum, offset]);
 
       return {
         success: true,
         data: transactionsResult.rows.map((row: any) => ({
-          id: row.id, amount: parseFloat(row.totalAmount || 0), paymentMethod: row.paymentMethod, createdAt: row.createdAt,
+          id: row.id, amount: parseFloat(row.total_amount || 0), paymentMethod: row.payment_method, createdAt: row.created_at,
           user: row.user_id ? { id: row.user_id, name: row.user_name } : null,
           store: row.store_id ? { id: row.store_id, name: row.store_name } : null,
         })),
@@ -304,13 +304,13 @@ export class AppController {
       last30Days.setDate(last30Days.getDate() - 30);
 
       const ordersByDayResult = await db.query(`
-        SELECT DATE("createdAt") as date, COUNT(*) as count FROM orders
-        WHERE "createdAt" >= $1 GROUP BY DATE("createdAt") ORDER BY date
+        SELECT DATE(created_at) as date, COUNT(*) as count FROM orders
+        WHERE created_at >= $1 GROUP BY DATE(created_at) ORDER BY date
       `, [last30Days]).catch(() => ({ rows: [] }));
 
       const topStoresResult = await db.query(`
-        SELECT s.id, s.name, COUNT(o.id) as order_count, COALESCE(SUM(o."totalAmount"), 0) as revenue
-        FROM stores s LEFT JOIN orders o ON s.id = o."storeId"
+        SELECT s.id, s.name, COUNT(o.id) as order_count, COALESCE(SUM(o.total_amount), 0) as revenue
+        FROM stores s LEFT JOIN orders o ON s.id = o.store_id
         GROUP BY s.id, s.name ORDER BY revenue DESC LIMIT 5
       `).catch(() => ({ rows: [] }));
 
