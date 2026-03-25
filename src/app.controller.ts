@@ -74,14 +74,10 @@ export class AppController {
       ] = await Promise.all([
         db.query('SELECT COUNT(*) as count FROM orders').catch(() => ({ rows: [{ count: 0 }] })),
         db.query('SELECT COUNT(*) as count FROM stores').catch(() => ({ rows: [{ count: 0 }] })),
-        db.query('SELECT COUNT(*) as count FROM users').catch(() => ({ rows: [{ count: 0 }] })),
+        db.query('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL').catch(() => ({ rows: [{ count: 0 }] })),
         db.query(`
-          SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
-                 u.id as user_id, u.name as user_name, u.phone as user_phone,
-                 s.id as store_id, s.name as store_name
+          SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at, o.store_name, o.user_id
           FROM orders o
-          LEFT JOIN users u ON o.user_id = u.id
-          LEFT JOIN stores s ON o.store_id = s.id
           ORDER BY o.created_at DESC
           LIMIT 10
         `).catch(() => ({ rows: [] })),
@@ -115,8 +111,8 @@ export class AppController {
             paymentStatus: row.payment_status,
             paymentMethod: row.payment_method,
             createdAt: row.created_at,
-            user: row.user_id ? { id: row.user_id, name: row.user_name, phone: row.user_phone } : null,
-            store: row.store_id ? { id: row.store_id, name: row.store_name } : null,
+            user: row.user_id ? { id: row.user_id } : null,
+            store: row.store_name ? { name: row.store_name } : null,
           })),
         },
       };
