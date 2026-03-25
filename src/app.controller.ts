@@ -46,9 +46,31 @@ export class AppController {
       const ticketsColumns = await db.query(`
         SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'tickets'
       `);
+      
+      // Check actual data counts
+      const ordersCount = await db.query('SELECT COUNT(*) as count FROM orders');
+      const storesCount = await db.query('SELECT COUNT(*) as count FROM stores');
+      const usersCount = await db.query('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL');
+      const ridersCount = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'");
+      
+      // Get sample orders
+      const sampleOrders = await db.query('SELECT * FROM orders LIMIT 5');
+      const sampleStores = await db.query('SELECT id, name, store_name, is_active FROM stores LIMIT 5');
+      const sampleUsers = await db.query('SELECT id, email, role, raw_user_meta_data FROM users WHERE email IS NOT NULL LIMIT 5');
 
       return {
         success: true,
+        counts: {
+          orders: parseInt(ordersCount.rows[0]?.count || 0),
+          stores: parseInt(storesCount.rows[0]?.count || 0),
+          users: parseInt(usersCount.rows[0]?.count || 0),
+          riders: parseInt(ridersCount.rows[0]?.count || 0),
+        },
+        sampleData: {
+          orders: sampleOrders.rows,
+          stores: sampleStores.rows,
+          users: sampleUsers.rows,
+        },
         tables: {
           users: usersColumns.rows,
           orders: ordersColumns.rows,
