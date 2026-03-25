@@ -178,23 +178,23 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL');
+      const countResult = await db.query('SELECT COUNT(*) as count FROM users');
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const usersResult = await db.query(`
-        SELECT id, email, phone, role, 
-               raw_user_meta_data->>'name' as name,
-               raw_user_meta_data->>'is_blocked' as is_blocked,
-               created_at
-        FROM users WHERE email IS NOT NULL
-        ORDER BY created_at DESC LIMIT $1 OFFSET $2
+        SELECT id, email, phone, role, created_at
+        FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: usersResult.rows.map((row: any) => ({
-          id: row.id, name: row.name || 'N/A', email: row.email, phone: row.phone,
-          role: row.role, isBlocked: row.is_blocked === 'true', createdAt: row.created_at,
+          id: row.id, 
+          name: row.email || row.phone || 'N/A', 
+          email: row.email, 
+          phone: row.phone,
+          role: row.role, 
+          createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
@@ -216,17 +216,23 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const storesResult = await db.query(`
-        SELECT s.id, s.name, s.store_name, s.address_line, s.is_active, s.created_at,
-               s.owner_id
-        FROM stores s
-        ORDER BY s.created_at DESC LIMIT $1 OFFSET $2
+        SELECT id, name, store_name, address_line, address_line1, city, state, is_active, is_online, status, created_at, owner_id
+        FROM stores
+        ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: storesResult.rows.map((row: any) => ({
-          id: row.id, name: row.name || row.store_name, address: row.address_line,
-          isApproved: row.is_active, isDisabled: !row.is_active, createdAt: row.created_at,
+          id: row.id, 
+          name: row.name || row.store_name, 
+          address: row.address_line || row.address_line1,
+          city: row.city,
+          state: row.state,
+          isActive: row.is_active, 
+          isOnline: row.is_online,
+          status: row.status,
+          createdAt: row.created_at,
           owner: row.owner_id ? { id: row.owner_id } : null,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
@@ -249,18 +255,18 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ridersResult = await db.query(`
-        SELECT id, email, phone, role,
-               raw_user_meta_data->>'name' as name,
-               raw_user_meta_data->>'is_blocked' as is_blocked,
-               created_at
+        SELECT id, email, phone, role, created_at
         FROM users WHERE role = 'RIDER' ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: ridersResult.rows.map((row: any) => ({
-          id: row.id, name: row.name || 'N/A', email: row.email, phone: row.phone,
-          isBlocked: row.is_blocked === 'true', createdAt: row.created_at,
+          id: row.id, 
+          name: row.email || row.phone || 'N/A', 
+          email: row.email, 
+          phone: row.phone,
+          createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
