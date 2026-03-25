@@ -155,6 +155,8 @@ export class AppController {
   async getOrders(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
+    @Query('search') search: string = '',
+    @Query('status') status: string = '',
   ) {
     try {
       const db = getPool();
@@ -162,15 +164,38 @@ export class AppController {
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM "Order"');
+      // Build WHERE clause for search and status filter
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (search) {
+        const searchPattern = `%${search}%`;
+        conditions.push(`("orderNumber" ILIKE $${paramIndex} OR "customerName" ILIKE $${paramIndex} OR "customerPhone" ILIKE $${paramIndex} OR id ILIKE $${paramIndex})`);
+        params.push(searchPattern);
+        paramIndex++;
+      }
+
+      if (status && status !== 'all') {
+        conditions.push(`status = $${paramIndex}`);
+        params.push(status);
+        paramIndex++;
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      // Count with filters
+      const countResult = await db.query(`SELECT COUNT(*) as count FROM "Order" ${whereClause}`, params);
       const total = parseInt(countResult.rows[0]?.count || 0);
 
+      // Get orders with filters
       const ordersResult = await db.query(`
         SELECT id, "orderNumber", status, "totalAmount", "paymentStatus", "paymentMethod", "createdAt", "storeName", "deliveryAddress", "customerName", "customerPhone"
         FROM "Order"
+        ${whereClause}
         ORDER BY "createdAt" DESC
-        LIMIT $1 OFFSET $2
-      `, [limitNum, offset]);
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `, [...params, limitNum, offset]);
 
       return {
         success: true,
@@ -195,20 +220,29 @@ export class AppController {
   }
 
   @Get('public/admin-users')
-  async getUsers(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
+  async getUsers(@Query('page') page: string = '1', @Query('limit') limit: string = '20', @Query('search') search: string = '') {
     try {
       const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM "User"');
+      // Build WHERE clause for search
+      let whereClause = '';
+      let params: any[] = [];
+      if (search) {
+        const searchPattern = `%${search}%`;
+        whereClause = `WHERE (name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1 OR id ILIKE $1)`;
+        params = [searchPattern];
+      }
+
+      const countResult = await db.query(`SELECT COUNT(*) as count FROM "User" ${whereClause}`, params);
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const usersResult = await db.query(`
         SELECT id, name, email, phone, role, "createdAt"
-        FROM "User" ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2
-      `, [limitNum, offset]);
+        FROM "User" ${whereClause} ORDER BY "createdAt" DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `, [...params, limitNum, offset]);
 
       return {
         success: true,
@@ -225,21 +259,30 @@ export class AppController {
   }
 
   @Get('public/admin-stores')
-  async getStores(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
+  async getStores(@Query('page') page: string = '1', @Query('limit') limit: string = '20', @Query('search') search: string = '') {
     try {
       const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM "Store"');
+      // Build WHERE clause for search
+      let whereClause = '';
+      let params: any[] = [];
+      if (search) {
+        const searchPattern = `%${search}%`;
+        whereClause = `WHERE (name ILIKE $1 OR address ILIKE $1 OR id ILIKE $1)`;
+        params = [searchPattern];
+      }
+
+      const countResult = await db.query(`SELECT COUNT(*) as count FROM "Store" ${whereClause}`, params);
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const storesResult = await db.query(`
         SELECT id, name, address, "isApproved", "isDisabled", "isOnline", "createdAt", "ownerId"
-        FROM "Store"
-        ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2
-      `, [limitNum, offset]);
+        FROM "Store" ${whereClause}
+        ORDER BY "createdAt" DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `, [...params, limitNum, offset]);
 
       return {
         success: true,
@@ -257,20 +300,29 @@ export class AppController {
   }
 
   @Get('public/admin-riders')
-  async getRiders(@Query('page') page: string = '1', @Query('limit') limit: string = '20') {
+  async getRiders(@Query('page') page: string = '1', @Query('limit') limit: string = '20', @Query('search') search: string = '') {
     try {
       const db = getPool();
       const pageNum = parseInt(page, 10) || 1;
       const limitNum = parseInt(limit, 10) || 20;
       const offset = (pageNum - 1) * limitNum;
 
-      const countResult = await db.query('SELECT COUNT(*) as count FROM delivery_partners');
+      // Build WHERE clause for search
+      let whereClause = '';
+      let params: any[] = [];
+      if (search) {
+        const searchPattern = `%${search}%`;
+        whereClause = `WHERE (name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1 OR id ILIKE $1)`;
+        params = [searchPattern];
+      }
+
+      const countResult = await db.query(`SELECT COUNT(*) as count FROM delivery_partners ${whereClause}`, params);
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ridersResult = await db.query(`
         SELECT id, name, email, phone, vehicle_type, vehicle_number, online_status, verification_status, total_deliveries, created_at
-        FROM delivery_partners ORDER BY created_at DESC LIMIT $1 OFFSET $2
-      `, [limitNum, offset]);
+        FROM delivery_partners ${whereClause} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `, [...params, limitNum, offset]);
 
       return {
         success: true,
