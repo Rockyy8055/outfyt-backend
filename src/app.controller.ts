@@ -254,17 +254,17 @@ export class AppController {
       const total = parseInt(countResult.rows[0]?.count || 0);
 
       const ridersResult = await db.query(`
-        SELECT id, name, email, phone, "vehicleType", "vehicleNumber", "onlineStatus", "verificationStatus", "totalDeliveries", "createdAt"
-        FROM delivery_partners ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2
+        SELECT id, name, email, phone, vehicle_type, vehicle_number, online_status, verification_status, total_deliveries, created_at
+        FROM delivery_partners ORDER BY created_at DESC LIMIT $1 OFFSET $2
       `, [limitNum, offset]);
 
       return {
         success: true,
         data: ridersResult.rows.map((row: any) => ({
           id: row.id, name: row.name || 'N/A', email: row.email, phone: row.phone,
-          vehicleType: row.vehicleType, vehicleNumber: row.vehicleNumber,
-          isOnline: row.onlineStatus, verificationStatus: row.verificationStatus,
-          totalDeliveries: row.totalDeliveries, createdAt: row.createdAt,
+          vehicleType: row.vehicle_type, vehicleNumber: row.vehicle_number,
+          isOnline: row.online_status, verificationStatus: row.verification_status,
+          totalDeliveries: row.total_deliveries, createdAt: row.created_at,
         })),
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       };
