@@ -56,13 +56,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Get all online delivery partners with location from delivery_partners table
+    // Get all online delivery partners with location from User table
     const { data: riders, error: ridersError } = await supabase
-      .from('delivery_partners')
-      .select('id, name, phone, current_latitude, current_longitude, rating, vehicle_type')
-      .eq('online_status', true)
-      .not('current_latitude', 'is', null)
-      .not('current_longitude', 'is', null);
+      .from('User')
+      .select('id, name, phone, currentLat, currentLng, rating')
+      .eq('role', 'RIDER')
+      .eq('isOnline', true)
+      .not('currentLat', 'is', null)
+      .not('currentLng', 'is', null);
 
     if (ridersError) {
       return new Response(JSON.stringify({ error: 'Failed to fetch riders', details: ridersError.message }), {
@@ -77,18 +78,17 @@ Deno.serve(async (req: Request) => {
         const distance = calculateDistance(
           store.latitude,
           store.longitude,
-          rider.current_latitude,
-          rider.current_longitude
+          rider.currentLat,
+          rider.currentLng
         );
         return {
           id: rider.id,
           name: rider.name,
           phone: rider.phone,
-          latitude: rider.current_latitude,
-          longitude: rider.current_longitude,
+          latitude: rider.currentLat,
+          longitude: rider.currentLng,
           distance: Math.round(distance * 10) / 10, // Round to 1 decimal
           rating: rider.rating,
-          vehicle_type: rider.vehicle_type,
         };
       })
       .filter((rider: any) => rider.distance <= radius)

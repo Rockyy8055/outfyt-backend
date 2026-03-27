@@ -47,7 +47,10 @@ Deno.serve(async (req: Request) => {
         createdAt,
         userId,
         storeId,
-        riderId
+        riderId,
+        customerName,
+        customerPhone,
+        storeName
       `)
       .eq('id', orderId)
       .maybeSingle();

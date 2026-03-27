@@ -186,9 +186,9 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'ACCEPTED' })
       .eq('id', alert.id);
 
-    // Get rider details from delivery_partners
+    // Get rider details from User table
     const { data: rider } = await supabase
-      .from('delivery_partners')
+      .from('User')
       .select('id, name, phone')
       .eq('id', riderId)
       .single();
@@ -290,8 +290,17 @@ Deno.serve(async (req: Request) => {
       distanceKm = Math.round(R * c * 10) / 10;
     }
     
-    // Calculate earnings (10% of order value, minimum ₹20)
-    const earnings = Math.max(Math.round(order.totalAmount * 0.1), 20);
+    // Calculate rider earnings: ₹30 base + ₹7 per km
+    const earnings = Math.round(30 + (distanceKm * 7));
+    
+    // Update order with calculated earnings and distance
+    await supabase
+      .from('Order')
+      .update({
+        riderEarning: earnings,
+        distanceKm: distanceKm,
+      })
+      .eq('id', orderId);
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -301,16 +310,27 @@ Deno.serve(async (req: Request) => {
         status: order.status,
         totalAmount: order.totalAmount,
         otpCode: order.otpCode,
+        handoverCode: order.otpCode, // Same code for handover at store
         deliveryAddress: order.deliveryAddress,
         deliveryLat: order.deliveryLat,
         deliveryLng: order.deliveryLng,
         // Store details (from Store table - updated location)
+        storeId: storeData?.id || '',
+        storeName: storeData?.name || '',
+        storeAddress: storeData?.address || '',
+        storeLat: storeData?.latitude || 0,
+        storeLng: storeData?.longitude || 0,
+        // Legacy snake_case fields for backward compatibility
         store_id: storeData?.id || '',
         store_name: storeData?.name || '',
         store_address: storeData?.address || '',
         store_lat: storeData?.latitude || 0,
         store_lng: storeData?.longitude || 0,
         // Customer details
+        userId: userData?.id || '',
+        customerName: userData?.name || 'Customer',
+        customerPhone: userData?.phone || '',
+        // Legacy snake_case fields
         customer_id: userData?.id || '',
         customer_name: userData?.name || 'Customer',
         customer_phone: userData?.phone || '',
@@ -318,6 +338,8 @@ Deno.serve(async (req: Request) => {
         customer_lat: order.deliveryLat || 0,
         customer_lng: order.deliveryLng || 0,
         // Calculated fields
+        distanceKm: distanceKm,
+        riderEarning: earnings,
         distance_km: distanceKm,
         earnings: earnings,
         // Single verification code for all apps

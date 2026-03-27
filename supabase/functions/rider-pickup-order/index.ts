@@ -126,11 +126,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Update order status to PICKED_UP
+    // Update order status to OUT_FOR_DELIVERY (rider has picked up and is heading to customer)
     const { error: updateError } = await supabase
       .from('Order')
       .update({
-        status: 'PICKED_UP',
+        status: 'OUT_FOR_DELIVERY',
         pickedUpAt: new Date().toISOString(),
       })
       .eq('id', orderId);

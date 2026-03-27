@@ -139,6 +139,7 @@ Deno.serve(async (req: Request) => {
         deliveryLng,
         customerName,
         customerPhone,
+        storeName,
         packingStartedAt,
         createdAt,
         userId,
@@ -174,13 +175,14 @@ Deno.serve(async (req: Request) => {
     let nearbyRidersCount = 0;
 
     if (store?.latitude && store?.longitude) {
-      // Get all online riders with location
+      // Get all online riders with location from User table
       const { data: riders } = await supabase
-        .from('delivery_partners')
-        .select('id, name, phone, current_latitude, current_longitude')
-        .eq('online_status', true)
-        .not('current_latitude', 'is', null)
-        .not('current_longitude', 'is', null);
+        .from('User')
+        .select('id, name, phone, currentLat, currentLng')
+        .eq('role', 'RIDER')
+        .eq('isOnline', true)
+        .not('currentLat', 'is', null)
+        .not('currentLng', 'is', null);
 
       // Filter and sort by distance (25km radius)
       const nearbyRiders = (riders || [])
@@ -188,8 +190,8 @@ Deno.serve(async (req: Request) => {
           const distance = calculateDistance(
             store.latitude,
             store.longitude,
-            rider.current_latitude,
-            rider.current_longitude
+            rider.currentLat,
+            rider.currentLng
           );
           return {
             id: rider.id,

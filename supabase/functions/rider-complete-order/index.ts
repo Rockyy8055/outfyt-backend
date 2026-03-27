@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Get order details with customer location
+    // Get order details with customer location and rider earnings
     const { data: order, error: orderError } = await supabase
       .from('Order')
       .select(`
@@ -62,6 +62,8 @@ Deno.serve(async (req: Request) => {
         deliveryLat,
         deliveryLng,
         deliveryAddress,
+        riderEarning,
+        distanceKm,
         store:storeId (id, name, address)
       `)
       .eq('id', orderId)
@@ -128,8 +130,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Calculate earnings (10% of order value or minimum ₹20)
-    const earnings = Math.max(order.totalAmount * 0.1, 20);
+    // Use pre-calculated rider earnings from Order table (30 + distance × 7)
+    // Fallback to calculation if not available
+    const earnings = order.riderEarning || Math.round(30 + ((order.distanceKm || 0) * 7));
 
     // Update order status to DELIVERED
     const { error: updateError } = await supabase
@@ -158,7 +161,7 @@ Deno.serve(async (req: Request) => {
       await supabase
         .from('RiderWallet')
         .update({
-          balance: existingWallet.balance + earnings,
+          withdrawableBalance: existingWallet.withdrawableBalance + earnings,
           totalEarnings: existingWallet.totalEarnings + earnings,
           updatedAt: new Date().toISOString(),
         })
@@ -168,7 +171,7 @@ Deno.serve(async (req: Request) => {
         .from('RiderWallet')
         .insert({
           riderId,
-          balance: earnings,
+          withdrawableBalance: earnings,
           totalEarnings: earnings,
         });
     }
@@ -177,8 +180,9 @@ Deno.serve(async (req: Request) => {
     await supabase
       .from('WalletTransaction')
       .insert({
-        riderId,
-        type: 'EARNING',
+        riderWalletId: existingWallet?.id,
+        walletType: 'RIDER',
+        type: 'DELIVERY_EARNING',
         amount: earnings,
         orderId,
         description: `Delivery completed - Order #${order.orderNumber}`,

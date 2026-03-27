@@ -91,8 +91,8 @@ Deno.serve(async (req: Request) => {
         
         if (distance > radius) return null;
         
-        // Calculate estimated earnings (10% of order value or minimum ₹20)
-        const earnings = Math.max(order.totalAmount * 0.1, 20);
+        // Calculate rider earnings: ₹30 base + ₹7 per km
+        const earnings = 30 + (distance * 7);
         
         return {
           id: order.id,
@@ -158,7 +158,8 @@ Deno.serve(async (req: Request) => {
           const distance = store?.latitude && store?.longitude
             ? calculateDistance(latitude, longitude, store.latitude, store.longitude)
             : 0;
-          const earnings = order ? Math.max(order.totalAmount * 0.1, 20) : 20;
+          // Calculate rider earnings: ₹30 base + ₹7 per km
+          const earnings = 30 + (distance * 7);
           
           return {
             alertId: alert.id,

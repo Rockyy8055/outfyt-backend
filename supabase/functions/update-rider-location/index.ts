@@ -37,26 +37,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Update delivery_partners table with location and online status
+    // Update User table with location and online status
     const updateData: any = {
-      current_latitude: latitude,
-      current_longitude: longitude,
-      location_updated_at: new Date().toISOString(),
+      currentLat: latitude,
+      currentLng: longitude,
     };
     
     if (isOnline !== undefined) {
-      updateData.online_status = isOnline;
+      updateData.isOnline = isOnline;
     }
 
-    const { data: partnerData, error: partnerError } = await supabase
-      .from('delivery_partners')
+    const { data: userData, error: userError } = await supabase
+      .from('User')
       .update(updateData)
       .eq('id', riderId)
       .select()
       .single();
 
-    if (partnerError) {
-      return new Response(JSON.stringify({ error: 'Failed to update location', details: partnerError.message }), {
+    if (userError) {
+      return new Response(JSON.stringify({ error: 'Failed to update location', details: userError.message }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       });
@@ -67,7 +66,7 @@ Deno.serve(async (req: Request) => {
       location: {
         latitude,
         longitude,
-        isOnline: isOnline ?? partnerData?.online_status,
+        isOnline: isOnline ?? userData?.isOnline,
       },
       message: 'Location updated successfully'
     }), {
