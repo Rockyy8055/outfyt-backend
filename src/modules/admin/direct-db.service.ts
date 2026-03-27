@@ -34,27 +34,28 @@ export class DirectDbService {
       openTicketsResult,
       recentOrdersResult,
     ] = await Promise.all([
-      pool.query('SELECT COUNT(*) as count FROM orders'),
-      pool.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE payment_status = 'SUCCESS'"),
-      pool.query('SELECT COUNT(*) as count FROM orders WHERE created_at >= $1', [today]),
-      pool.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE payment_status = 'SUCCESS' AND created_at >= $1", [today]),
-      pool.query('SELECT COUNT(*) as count FROM stores WHERE is_disabled = false AND is_approved = true'),
-      pool.query('SELECT COUNT(*) as count FROM stores'),
-      pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER' AND is_blocked = false"),
-      pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'RIDER'"),
-      pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER'"),
-      pool.query("SELECT COUNT(*) as count FROM orders WHERE status = ANY($1)", [['PENDING', 'ACCEPTED', 'PACKING', 'READY']]),
-      pool.query("SELECT COUNT(*) as count FROM orders WHERE status = 'DELIVERED'"),
-      pool.query("SELECT COUNT(*) as count FROM orders WHERE status = 'CANCELLED'"),
-      pool.query("SELECT COUNT(*) as count FROM tickets WHERE status = ANY($1)", [['OPEN', 'IN_PROGRESS']]),
+      pool.query('SELECT COUNT(*) as count FROM "Order"'),
+      pool.query('SELECT COALESCE(SUM("totalAmount"), 0) as total FROM "Order" WHERE "paymentStatus" = $1', ['SUCCESS']),
+      pool.query('SELECT COUNT(*) as count FROM "Order" WHERE "createdAt" >= $1', [today]),
+      pool.query('SELECT COALESCE(SUM("totalAmount"), 0) as total FROM "Order" WHERE "paymentStatus" = $1 AND "createdAt" >= $2', ['SUCCESS', today]),
+      pool.query('SELECT COUNT(*) as count FROM "Store" WHERE "isDisabled" = false AND "isApproved" = true'),
+      pool.query('SELECT COUNT(*) as count FROM "Store"'),
+      pool.query('SELECT COUNT(*) as count FROM "User" WHERE role = $1 AND "isBlocked" = false', ['RIDER']),
+      pool.query('SELECT COUNT(*) as count FROM "User" WHERE role = $1', ['RIDER']),
+      pool.query('SELECT COUNT(*) as count FROM "User" WHERE role = $1', ['CUSTOMER']),
+      pool.query('SELECT COUNT(*) as count FROM "Order" WHERE status = ANY($1)', [['PENDING', 'ACCEPTED', 'PACKING', 'READY']]),
+      pool.query('SELECT COUNT(*) as count FROM "Order" WHERE status = $1', ['DELIVERED']),
+      pool.query('SELECT COUNT(*) as count FROM "Order" WHERE status = $1', ['CANCELLED']),
+      pool.query('SELECT COUNT(*) as count FROM "Ticket" WHERE status = ANY($1)', [['OPEN', 'IN_PROGRESS']]),
       pool.query(`
-        SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
+        SELECT o.id, o.status, o."totalAmount", o."paymentStatus", o."paymentMethod", o."createdAt",
+               o."customerName", o."customerPhone", o."orderNumber", o."storeName",
                u.id as user_id, u.name as user_name, u.phone as user_phone,
                s.id as store_id, s.name as store_name
-        FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
-        LEFT JOIN stores s ON o.store_id = s.id
-        ORDER BY o.created_at DESC
+        FROM "Order" o
+        LEFT JOIN "User" u ON o."userId" = u.id
+        LEFT JOIN "Store" s ON o."storeId" = s.id
+        ORDER BY o."createdAt" DESC
         LIMIT 10
       `),
     ]);
@@ -82,12 +83,15 @@ export class DirectDbService {
         },
         recentOrders: recentOrdersResult.rows.map((row: any) => ({
           id: row.id,
-          orderNumber: row.id.slice(0, 8).toUpperCase(),
+          orderNumber: row.orderNumber || row.id.slice(0, 8).toUpperCase(),
           status: row.status,
-          totalAmount: parseFloat(row.total_amount || 0),
-          paymentStatus: row.payment_status,
-          paymentMethod: row.payment_method,
-          createdAt: row.created_at,
+          totalAmount: parseFloat(row.totalAmount || 0),
+          paymentStatus: row.paymentStatus,
+          paymentMethod: row.paymentMethod,
+          createdAt: row.createdAt,
+          customerName: row.customerName,
+          customerPhone: row.customerPhone,
+          storeName: row.storeName,
           user: row.user_id ? {
             id: row.user_id,
             name: row.user_name,
@@ -117,27 +121,28 @@ export class DirectDbService {
       params.push(filters.status);
     }
     if (filters.storeId) {
-      whereClause += ` AND o.store_id = $${paramIndex++}`;
+      whereClause += ` AND o."storeId" = $${paramIndex++}`;
       params.push(filters.storeId);
     }
     if (filters.customerId) {
-      whereClause += ` AND o.user_id = $${paramIndex++}`;
+      whereClause += ` AND o."userId" = $${paramIndex++}`;
       params.push(filters.customerId);
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM orders o ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "Order" o ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const ordersResult = await pool.query(`
-      SELECT o.id, o.status, o.total_amount, o.payment_status, o.payment_method, o.created_at,
+      SELECT o.id, o.status, o."totalAmount", o."paymentStatus", o."paymentMethod", o."createdAt",
+             o."orderNumber", o."customerName", o."customerPhone", o."storeName", o."deliveryAddress",
              u.id as user_id, u.name as user_name, u.phone as user_phone,
              s.id as store_id, s.name as store_name, s.address as store_address
-      FROM orders o
-      LEFT JOIN users u ON o.user_id = u.id
-      LEFT JOIN stores s ON o.store_id = s.id
+      FROM "Order" o
+      LEFT JOIN "User" u ON o."userId" = u.id
+      LEFT JOIN "Store" s ON o."storeId" = s.id
       ${whereClause}
-      ORDER BY o.created_at DESC
+      ORDER BY o."createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -145,12 +150,16 @@ export class DirectDbService {
       success: true,
       data: ordersResult.rows.map((row: any) => ({
         id: row.id,
-        orderNumber: row.id.slice(0, 8).toUpperCase(),
+        orderNumber: row.orderNumber || row.id.slice(0, 8).toUpperCase(),
         status: row.status,
-        totalAmount: parseFloat(row.total_amount || 0),
-        paymentStatus: row.payment_status,
-        paymentMethod: row.payment_method,
-        createdAt: row.created_at,
+        totalAmount: parseFloat(row.totalAmount || 0),
+        paymentStatus: row.paymentStatus,
+        paymentMethod: row.paymentMethod,
+        createdAt: row.createdAt,
+        customerName: row.customerName,
+        customerPhone: row.customerPhone,
+        storeName: row.storeName,
+        deliveryAddress: row.deliveryAddress,
         user: row.user_id ? {
           id: row.user_id,
           name: row.user_name,
@@ -186,15 +195,15 @@ export class DirectDbService {
       paramIndex++;
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM users ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "User" ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const usersResult = await pool.query(`
-      SELECT id, name, email, phone, role, is_blocked, created_at
-      FROM users
+      SELECT id, name, email, phone, role, "isBlocked", "createdAt"
+      FROM "User"
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY "createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -206,8 +215,8 @@ export class DirectDbService {
         email: row.email,
         phone: row.phone,
         role: row.role,
-        isBlocked: row.is_blocked,
-        createdAt: row.created_at,
+        isBlocked: row.isBlocked,
+        createdAt: row.createdAt,
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
@@ -232,19 +241,19 @@ export class DirectDbService {
       params.push(filters.isDisabled === 'true');
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM stores ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "Store" ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const storesResult = await pool.query(`
-      SELECT s.id, s.name, s.address, s.is_approved, s.is_disabled, s.created_at,
+      SELECT s.id, s.name, s.address, s."isApproved", s."isDisabled", s."createdAt",
              u.id as owner_id, u.name as owner_name, u.phone as owner_phone,
-             (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) as product_count,
-             (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id) as order_count
-      FROM stores s
-      LEFT JOIN users u ON s.owner_id = u.id
+             (SELECT COUNT(*) FROM "Product" p WHERE p."storeId" = s.id) as product_count,
+             (SELECT COUNT(*) FROM "Order" o WHERE o."storeId" = s.id) as order_count
+      FROM "Store" s
+      LEFT JOIN "User" u ON s."ownerId" = u.id
       ${whereClause}
-      ORDER BY s.created_at DESC
+      ORDER BY s."createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -254,9 +263,9 @@ export class DirectDbService {
         id: row.id,
         name: row.name,
         address: row.address,
-        isApproved: row.is_approved,
-        isDisabled: row.is_disabled,
-        createdAt: row.created_at,
+        isApproved: row.isApproved,
+        isDisabled: row.isDisabled,
+        createdAt: row.createdAt,
         owner: row.owner_id ? {
           id: row.owner_id,
           name: row.owner_name,
@@ -284,16 +293,16 @@ export class DirectDbService {
       params.push(filters.isBlocked === 'true');
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM users ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "User" ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const ridersResult = await pool.query(`
-      SELECT id, name, email, phone, is_blocked, created_at,
-             (SELECT COUNT(*) FROM orders o WHERE o.rider_id = users.id) as delivery_count
-      FROM users
+      SELECT id, name, email, phone, "isBlocked", "createdAt",
+             (SELECT COUNT(*) FROM "Order" o WHERE o."riderId" = "User".id) as delivery_count
+      FROM "User"
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY "createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -304,8 +313,8 @@ export class DirectDbService {
         name: row.name,
         email: row.email,
         phone: row.phone,
-        isBlocked: row.is_blocked,
-        createdAt: row.created_at,
+        isBlocked: row.isBlocked,
+        createdAt: row.createdAt,
         deliveryCount: parseInt(row.delivery_count || 0),
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
@@ -327,17 +336,17 @@ export class DirectDbService {
       params.push(filters.status);
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM tickets ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "Ticket" ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const ticketsResult = await pool.query(`
-      SELECT t.id, t.subject, t.status, t.priority, t.created_at,
+      SELECT t.id, t.subject, t.status, t.priority, t."createdAt",
              u.id as user_id, u.name as user_name, u.email as user_email
-      FROM tickets t
-      LEFT JOIN users u ON t.user_id = u.id
+      FROM "Ticket" t
+      LEFT JOIN "User" u ON t."userId" = u.id
       ${whereClause}
-      ORDER BY t.created_at DESC
+      ORDER BY t."createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -348,7 +357,7 @@ export class DirectDbService {
         subject: row.subject,
         status: row.status,
         priority: row.priority,
-        createdAt: row.created_at,
+        createdAt: row.createdAt,
         user: row.user_id ? {
           id: row.user_id,
           name: row.user_name,
@@ -374,19 +383,19 @@ export class DirectDbService {
       params.push(filters.status);
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) as count FROM orders ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) as count FROM "Order" ${whereClause}`, params);
     const total = parseInt(countResult.rows[0]?.count || 0);
 
     params.push(limit, offset);
     const transactionsResult = await pool.query(`
-      SELECT o.id, o.total_amount, o.payment_method, o.created_at,
+      SELECT o.id, o."totalAmount", o."paymentMethod", o."createdAt",
              u.id as user_id, u.name as user_name,
              s.id as store_id, s.name as store_name
-      FROM orders o
-      LEFT JOIN users u ON o.user_id = u.id
-      LEFT JOIN stores s ON o.store_id = s.id
+      FROM "Order" o
+      LEFT JOIN "User" u ON o."userId" = u.id
+      LEFT JOIN "Store" s ON o."storeId" = s.id
       ${whereClause}
-      ORDER BY o.created_at DESC
+      ORDER BY o."createdAt" DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `, params);
 
@@ -394,9 +403,9 @@ export class DirectDbService {
       success: true,
       data: transactionsResult.rows.map((row: any) => ({
         id: row.id,
-        amount: parseFloat(row.total_amount || 0),
-        paymentMethod: row.payment_method,
-        createdAt: row.created_at,
+        amount: parseFloat(row.totalAmount || 0),
+        paymentMethod: row.paymentMethod,
+        createdAt: row.createdAt,
         user: row.user_id ? {
           id: row.user_id,
           name: row.user_name,

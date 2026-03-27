@@ -51,12 +51,20 @@ export class OrdersService {
       distanceKm: number;
     };
   }> {
-    const store = await this.prisma.store.findUnique({
-      where: { id: input.dto.storeId },
-      select: { id: true, latitude: true, longitude: true },
-    });
+    // Get store and user data in parallel
+    const [store, user] = await Promise.all([
+      this.prisma.store.findUnique({
+        where: { id: input.dto.storeId },
+        select: { id: true, latitude: true, longitude: true, name: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true, name: true, phone: true },
+      }),
+    ]);
 
     if (!store) throw new NotFoundException('Store not found');
+    if (!user) throw new NotFoundException('User not found');
 
     const items = input.dto.items;
     const uniqueKey = (i: { productId: string; size: string }) =>
@@ -151,6 +159,10 @@ export class OrdersService {
           deliveryLat: input.dto.deliveryLat,
           deliveryLng: input.dto.deliveryLng,
           deliveryAddress: input.dto.deliveryAddress,
+          // Customer and store details (denormalized)
+          customerName: user.name,
+          customerPhone: user.phone,
+          storeName: store.name,
           // Financial breakdown
           distanceKm: financials.distanceKm,
           productAmount: financials.productAmount,

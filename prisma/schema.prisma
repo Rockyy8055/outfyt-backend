@@ -179,6 +179,11 @@ model Order {
   packingStartedAt DateTime?
   rejectionReason  String?
   
+  // Customer details (denormalized for quick access)
+  customerName     String?
+  customerPhone    String?
+  storeName        String?
+  
   // Financial breakdown fields
   distanceKm       Float         @default(0)
   productAmount    Float         @default(0)

@@ -1,6 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Param } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Pool } from 'pg';
+import { createRazorpayOrder, verifyPaymentSignature } from './services/payment.service';
+import { calculateOrderFinancials } from './utils/pricing.util';
 
 // Singleton pool instance
 let pool: Pool | null = null;
@@ -690,6 +692,318 @@ export class AppController {
       };
     } catch (error: any) {
       console.error('[Order Breakdown Error]', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  // ==================== PAYMENT ENDPOINTS ====================
+
+  @Post('public/create-payment-order')
+  async createPaymentOrder(
+    @Body() body: {
+      productAmount: number;
+      storeId: string;
+      storeLat: number;
+      storeLng: number;
+      deliveryLat: number;
+      deliveryLng: number;
+    }
+  ) {
+    try {
+      const { productAmount, storeId, storeLat, storeLng, deliveryLat, deliveryLng } = body;
+
+      // Calculate full financial breakdown
+      const financials = calculateOrderFinancials(
+        productAmount,
+        storeLat,
+        storeLng,
+        deliveryLat,
+        deliveryLng
+      );
+
+      // Create Razorpay order
+      const receipt = `order_${Date.now()}_${storeId.slice(0, 8)}`;
+      const razorpayOrder = await createRazorpayOrder(
+        financials.totalAmount,
+        {
+          productAmount: financials.productAmount,
+          deliveryFee: financials.deliveryFee,
+          platformFee: financials.platformFee,
+          packingCharge: financials.packingCharge,
+          gstAmount: financials.gstAmount,
+          totalAmount: financials.totalAmount,
+        },
+        receipt
+      );
+
+      return {
+        success: true,
+        data: {
+          razorpayOrderId: razorpayOrder.razorpayOrderId,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          breakdown: razorpayOrder.breakdown,
+          keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_SVS9yEFnBQEGdS',
+        },
+      };
+    } catch (error: any) {
+      console.error('[Create Payment Order Error]', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  @Post('public/verify-payment')
+  async verifyPayment(
+    @Body() body: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+      orderId: string;
+    }
+  ) {
+    try {
+      const { razorpayOrderId, razorpayPaymentId, razorpaySignature, orderId } = body;
+
+      // Verify signature
+      const isValid = verifyPaymentSignature({
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+      });
+
+      if (!isValid) {
+        return { success: false, error: 'Invalid payment signature', data: null };
+      }
+
+      const db = getPool();
+
+      // Update order payment status - DO NOT update wallet yet
+      await db.query(`
+        UPDATE "Order" 
+        SET "paymentStatus" = 'PAID',
+            "razorpayOrderId" = $1,
+            "razorpayPaymentId" = $2
+        WHERE id = $3
+      `, [razorpayOrderId, razorpayPaymentId, orderId]);
+
+      return {
+        success: true,
+        data: {
+          orderId,
+          paymentStatus: 'PAID',
+          message: 'Payment verified successfully. Wallet will be credited after delivery.',
+        },
+      };
+    } catch (error: any) {
+      console.error('[Verify Payment Error]', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  // ==================== ORDER DETAILS WITH FULL BREAKDOWN ====================
+
+  @Get('public/order/:id')
+  async getOrderById(@Param('id') orderId: string) {
+    try {
+      const db = getPool();
+      
+      const orderResult = await db.query(`
+        SELECT 
+          o.id, o."orderNumber", o.status, o."paymentStatus", o."paymentMethod",
+          o."totalAmount", o."createdAt", o."deliveredAt",
+          o."distanceKm", o."productAmount", o."deliveryFee", 
+          o."riderEarning", o."deliveryMargin", o."commissionAmount",
+          o."platformFee", o."packingCharge", o."gstAmount",
+          o."storeEarning", o."platformEarning",
+          o."deliveryAddress", o."deliveryLat", o."deliveryLng",
+          s.id as "storeId", s.name as "storeName", s.address as "storeAddress",
+          s.latitude as "storeLat", s.longitude as "storeLng",
+          u.name as "customerName", u.phone as "customerPhone"
+        FROM "Order" o
+        JOIN "Store" s ON o."storeId" = s.id
+        LEFT JOIN "User" u ON o."userId" = u.id
+        WHERE o.id = $1
+      `, [orderId]);
+
+      const order = orderResult.rows[0];
+
+      if (!order) {
+        return { success: false, error: 'Order not found', data: null };
+      }
+
+      // Get order items
+      const itemsResult = await db.query(`
+        SELECT id, "productId", "productName", size, quantity, "unitPrice"
+        FROM "OrderItem"
+        WHERE "orderId" = $1
+      `, [orderId]);
+
+      return {
+        success: true,
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          createdAt: order.createdAt,
+          deliveredAt: order.deliveredAt,
+          customer: {
+            name: order.customerName,
+            phone: order.customerPhone,
+          },
+          store: {
+            id: order.storeId,
+            name: order.storeName,
+            address: order.storeAddress,
+            latitude: order.storeLat,
+            longitude: order.storeLng,
+          },
+          delivery: {
+            address: order.deliveryAddress,
+            latitude: order.deliveryLat,
+            longitude: order.deliveryLng,
+          },
+          distance: {
+            km: parseFloat(order.distanceKm || 0),
+          },
+          breakdown: {
+            productAmount: parseFloat(order.productAmount || 0),
+            deliveryFee: parseFloat(order.deliveryFee || 0),
+            platformFee: parseFloat(order.platformFee || 0),
+            packingCharge: parseFloat(order.packingCharge || 0),
+            gstAmount: parseFloat(order.gstAmount || 0),
+            commissionAmount: parseFloat(order.commissionAmount || 0),
+            totalAmount: parseFloat(order.totalAmount || 0),
+          },
+          payouts: {
+            storeEarning: parseFloat(order.storeEarning || 0),
+            riderEarning: parseFloat(order.riderEarning || 0),
+            platformEarning: parseFloat(order.platformEarning || 0),
+          },
+          items: itemsResult.rows.map((item: any) => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.productName,
+            size: item.size,
+            quantity: item.quantity,
+            unitPrice: parseFloat(item.unitPrice || 0),
+          })),
+        },
+      };
+    } catch (error: any) {
+      console.error('[Get Order Error]', error);
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  // ==================== STORE ORDERS WITH EARNINGS ====================
+
+  @Get('public/store/orders/:storeId')
+  async getStoreOrders(@Param('storeId') storeId: string) {
+    try {
+      const db = getPool();
+      
+      const ordersResult = await db.query(`
+        SELECT 
+          id, "orderNumber", status, "paymentStatus", "paymentMethod",
+          "totalAmount", "createdAt", "deliveredAt",
+          "productAmount", "commissionAmount", "storeEarning",
+          "deliveryAddress"
+        FROM "Order"
+        WHERE "storeId" = $1
+        ORDER BY "createdAt" DESC
+        LIMIT 50
+      `, [storeId]);
+
+      return {
+        success: true,
+        data: ordersResult.rows.map((order: any) => ({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          productAmount: parseFloat(order.productAmount || 0),
+          commissionAmount: parseFloat(order.commissionAmount || 0),
+          storeEarning: parseFloat(order.storeEarning || 0),
+          totalAmount: parseFloat(order.totalAmount || 0),
+          deliveryAddress: order.deliveryAddress,
+          createdAt: order.createdAt,
+          deliveredAt: order.deliveredAt,
+        })),
+      };
+    } catch (error: any) {
+      console.error('[Store Orders Error]', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  // ==================== STORE ANALYTICS ====================
+
+  @Get('public/store/analytics/:storeId')
+  async getStoreAnalyticsDashboard(@Param('storeId') storeId: string) {
+    try {
+      const db = getPool();
+      
+      // Get wallet
+      const walletResult = await db.query(`
+        SELECT * FROM "StoreWallet" WHERE "storeId" = $1
+      `, [storeId]);
+      
+      const wallet = walletResult.rows[0];
+
+      // Get today's earnings
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayResult = await db.query(`
+        SELECT 
+          COUNT(*) as orders,
+          COALESCE(SUM("storeEarning"), 0) as earnings
+        FROM "Order"
+        WHERE "storeId" = $1 
+          AND status = 'DELIVERED'
+          AND "deliveredAt" >= $2
+      `, [storeId, today]);
+
+      const todayData = todayResult.rows[0];
+
+      // Get total stats
+      const statsResult = await db.query(`
+        SELECT 
+          COUNT(*) as "totalOrders",
+          COALESCE(SUM("productAmount"), 0) as "totalRevenue",
+          COALESCE(SUM("commissionAmount"), 0) as "totalCommission",
+          COALESCE(SUM("storeEarning"), 0) as "totalEarnings"
+        FROM "Order"
+        WHERE "storeId" = $1 AND status = 'DELIVERED'
+      `, [storeId]);
+
+      const stats = statsResult.rows[0];
+
+      return {
+        success: true,
+        data: {
+          wallet: {
+            totalEarnings: parseFloat(wallet?.totalEarnings || 0),
+            withdrawableBalance: parseFloat(wallet?.withdrawableBalance || 0),
+            pendingBalance: parseFloat(wallet?.pendingBalance || 0),
+          },
+          today: {
+            orders: parseInt(todayData.orders || 0),
+            earnings: parseFloat(todayData.earnings || 0),
+          },
+          total: {
+            orders: parseInt(stats.totalOrders || 0),
+            revenue: parseFloat(stats.totalRevenue || 0),
+            commission: parseFloat(stats.totalCommission || 0),
+            earnings: parseFloat(stats.totalEarnings || 0),
+          },
+        },
+      };
+    } catch (error: any) {
+      console.error('[Store Analytics Error]', error);
       return { success: false, error: error.message, data: null };
     }
   }
